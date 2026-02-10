@@ -7,11 +7,20 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@monaco-editor/react": "^4.7.0",
+    "@sqlite.org/sqlite-wasm": "^3.51.2-build6",
+    "@webcontainer/api": "^1.6.1",
+    "@xterm/addon-fit": "^0.11.0",
+    "@xterm/xterm": "^6.0.0",
+    "esbuild-wasm": "^0.27.3",
+    "lucide-react": "^0.563.0",
     "react": "^19.2.0",
-    "react-dom": "^19.2.0"
+    "react-dom": "^19.2.0",
+    "react-resizable-panels": "^4.6.2"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.1",
