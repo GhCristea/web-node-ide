@@ -1,9 +1,9 @@
-import type { FileRecord } from '../service/types';
+import type { FileRecord } from '../types/dbTypes';
 import type { WorkerRequest, WorkerResponse } from './types';
 
 /**
  * Thin client wrapper around the DB worker.
- * Provides a promise-based API that matches db.ts signatures.
+ * Provides a promise-based API that matches db.impl.ts signatures.
  */
 export class DBWorkerClient {
   private worker: Worker;
