@@ -1,19 +1,20 @@
 import { buildTree, getFilePath, generateFilePaths } from '../fileUtils';
-import type { IDEService, IDEDependencies, FileRecord } from './types';
+import type { IDEService, IDEDependencies } from './types';
 import type { FileNode } from '../FileTree';
+import type { WebContainer } from '@webcontainer/api';
 
 export function createIDEService(deps: IDEDependencies): IDEService {
-  let _filesCache: FileRecord[] = [];
-
   return {
     async initialize() {
       await deps.db.initDb();
     },
 
-    async loadFiles(isWcReady: boolean, mount: (paths: Record<string, string>) => Promise<void>) {
+    async loadFiles(
+      isWcReady: boolean,
+      mount: (paths: Record<string, string>) => Promise<void>
+    ) {
       const allFiles = await deps.db.getFilesFromDb();
-      _filesCache = allFiles;
-      
+
       const tree = buildTree(allFiles);
 
       if (isWcReady) {
@@ -27,7 +28,13 @@ export function createIDEService(deps: IDEDependencies): IDEService {
       return deps.db.getFileContent(id);
     },
 
-    async saveFile(id: string, content: string, isWcReady: boolean, writeFile: (path: string, content: string) => Promise<void>, files: FileNode[]) {
+    async saveFile(
+      id: string,
+      content: string,
+      isWcReady: boolean,
+      writeFile: (path: string, content: string) => Promise<void>,
+      files: FileNode[]
+    ) {
       await deps.db.saveFileContent(id, content);
 
       if (isWcReady) {
@@ -39,7 +46,11 @@ export function createIDEService(deps: IDEDependencies): IDEService {
       }
     },
 
-    async createNode(name: string, type: 'file' | 'folder', parentId: string | null) {
+    async createNode(
+      name: string,
+      type: 'file' | 'folder',
+      parentId: string | null
+    ) {
       await deps.db.createFile(name, parentId, type, type === 'file' ? '' : '');
     },
 
@@ -62,15 +73,18 @@ export function createIDEService(deps: IDEDependencies): IDEService {
       }
     },
 
-    async runFile(fileId: string, isWcReady: boolean, webContainer: any, files: FileNode[]) {
+    async runFile(
+      fileId: string,
+      isWcReady: boolean,
+      webContainer: WebContainer,
+      files: FileNode[]
+    ) {
       if (!isWcReady || !webContainer) return;
 
       const path = getFilePath(files, fileId);
       if (!path) return;
 
-      deps.terminal.write(
-        `\r\n\x1b[1;36m➤ Executing ${path}...\x1b[0m\r\n`
-      );
+      deps.terminal.write(`\r\n\x1b[1;36m➤ Executing ${path}...\x1b[0m\r\n`);
 
       try {
         const process = await webContainer.spawn('node', [path]);

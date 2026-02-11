@@ -203,30 +203,3 @@ export async function resetFileSystem() {
   });
   console.log('File system reset successfully');
 }
-
-export function generateFilePaths(files: FileRecord[]): Record<string, string> {
-  const fileMap = new Map<string, FileRecord>(files.map((f) => [f.id, f]));
-  const paths: Record<string, string> = {};
-
-  files.forEach((file) => {
-    if (file.type === 'folder') return;
-
-    let current: FileRecord | undefined = file;
-    const pathParts: string[] = [];
-
-    while (current) {
-      pathParts.unshift(current.name);
-      if (current.parentId) {
-        current = fileMap.get(current.parentId);
-      } else {
-        current = undefined;
-      }
-    }
-
-    if (pathParts.length > 0) {
-      paths[pathParts.join('/')] = file.content || '';
-    }
-  });
-
-  return paths;
-}
