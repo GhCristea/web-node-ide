@@ -143,6 +143,21 @@ export async function renameFile(id: string, newName: string) {
   }
 }
 
+export async function moveFile(id: string, newParentId: string | null) {
+  const promiser = await initDb();
+  try {
+    await promiser('exec', {
+      sql: 'UPDATE files SET parentId = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+      bind: [newParentId, id],
+      dbId
+    });
+    console.log(`Moved file ${id} to parent ${newParentId}`);
+  } catch (error) {
+    console.error('Failed to move file:', error);
+    throw error;
+  }
+}
+
 export async function deleteFile(id: string) {
   const promiser = await initDb();
   try {
