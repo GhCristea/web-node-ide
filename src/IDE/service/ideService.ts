@@ -3,12 +3,34 @@ import { buildTree, buildWebContainerTree, generateFilePaths } from '../fileUtil
 import type { IDEService, IDEDependencies, FileNode } from './types';
 import type { FileRecord } from '../types/dbTypes';
 
+/**
+ * WebContainer is a singleton per page.
+ * React.StrictMode intentionally mounts/unmounts components twice in dev, so we must boot once.
+ */
+let _sharedWebContainer: WebContainer | null = null;
+let _sharedWebContainerPromise: Promise<WebContainer> | null = null;
+let _sharedWebContainerAnnouncedReady = false;
+
+function ensureWebContainerBootedOnce(): Promise<WebContainer> {
+  if (_sharedWebContainer) return Promise.resolve(_sharedWebContainer);
+
+  if (!_sharedWebContainerPromise) {
+    _sharedWebContainerPromise = WebContainer.boot().then((wc) => {
+      _sharedWebContainer = wc;
+      return wc;
+    });
+  }
+
+  return _sharedWebContainerPromise;
+}
+
 export function createIDEService(deps: IDEDependencies): IDEService {
   // Internal State
   let _filesCache: FileRecord[] = [];
   let _treeCache: FileNode[] = [];
   let _webContainer: WebContainer | null = null;
   let _isWcReady = false;
+  let _initializeCalled = false;
 
   // --- Helpers ---
 
@@ -69,16 +91,27 @@ export function createIDEService(deps: IDEDependencies): IDEService {
 
   return {
     async initialize() {
-      // 1. Init DB
+      // Idempotent per-service instance
+      if (_initializeCalled) return;
+      _initializeCalled = true;
+
+      // 1. Init DB (persistence truth)
       await deps.db.initDb();
 
-      // 2. Boot WebContainer (Async, doesn't block UI init)
-      WebContainer.boot()
+      // 2. Boot WebContainer once (runtime consumer)
+      ensureWebContainerBootedOnce()
         .then(async (wc) => {
           _webContainer = wc;
           _isWcReady = true;
-          await mountAll(); // Mount whatever files we have loaded
-          deps.terminal.write('\x1b[32m✓ Node.js Runtime Ready\x1b[0m\r\n');
+
+          // Mount whatever files we currently have (may be empty; loadFiles() will mount again).
+          await mountAll();
+
+          if (!_sharedWebContainerAnnouncedReady) {
+            deps.terminal.write('\x1b[32m✓ Node.js Runtime Ready\x1b[0m\r\n');
+            _sharedWebContainerAnnouncedReady = true;
+          }
+
           if (deps.onReady) deps.onReady();
         })
         .catch(err => {
@@ -96,10 +129,10 @@ export function createIDEService(deps: IDEDependencies): IDEService {
       const allFiles = await deps.db.getFilesFromDb();
       _filesCache = allFiles;
       
-      // Update Tree
+      // Update Tree (React should show this immediately)
       const tree = updateTree();
 
-      // If WC is already ready, make sure it has latest files
+      // Runtime is just a consumer: best-effort sync
       if (_isWcReady) {
         await mountAll();
       }
@@ -112,17 +145,16 @@ export function createIDEService(deps: IDEDependencies): IDEService {
     },
 
     async saveFile(id: string, content: string) {
-      // 1. Update DB (Worker)
+      // 1. Persist
       await deps.db.saveFileContent(id, content);
 
-      // 2. Optimistic Update (Local Cache)
+      // 2. Update session cache
       const cachedFile = _filesCache.find(f => f.id === id);
       if (cachedFile) {
         cachedFile.content = content;
-        // Note: content change doesn't affect tree structure, so no updateTree() needed
       }
 
-      // 3. Sync to Runtime
+      // 3. Sync runtime (best effort)
       await syncToWebContainer(id, content);
     },
 
@@ -134,10 +166,10 @@ export function createIDEService(deps: IDEDependencies): IDEService {
     ) {
       const parentId = resolveParentId(selectedFileId, explicitParentId);
       
-      // 1. DB Op
+      // 1. Persist
       const id = await deps.db.createFile(name, parentId, type, type === 'file' ? '' : '');
 
-      // 2. Optimistic Cache Update
+      // 2. Update session cache
       const newFile: FileRecord = {
         id,
         name,
@@ -148,24 +180,24 @@ export function createIDEService(deps: IDEDependencies): IDEService {
       };
       _filesCache.push(newFile);
 
-      // 3. Sync to Runtime (if file)
+      // 3. Sync runtime
       if (type === 'file') {
         await syncToWebContainer(id, '');
       } else {
-         if (_isWcReady && _webContainer) {
-            const path = getPathFromCache(id);
-            if (path) await _webContainer.fs.mkdir(path, { recursive: true });
-         }
+        if (_isWcReady && _webContainer) {
+          const path = getPathFromCache(id);
+          if (path) await _webContainer.fs.mkdir(path, { recursive: true });
+        }
       }
 
       return updateTree();
     },
 
     async deleteNode(id: string) {
-      // 1. DB Op
+      // 1. Persist
       await deps.db.deleteFile(id);
 
-      // 2. Optimistic Cache Update (Recursive removal)
+      // 2. Update session cache (recursive removal)
       const toRemove = new Set<string>();
       const collect = (nodeId: string) => {
         toRemove.add(nodeId);
@@ -179,10 +211,10 @@ export function createIDEService(deps: IDEDependencies): IDEService {
     },
 
     async renameNode(id: string, newName: string) {
-      // 1. DB Op
+      // 1. Persist
       await deps.db.renameFile(id, newName);
 
-      // 2. Optimistic Cache Update
+      // 2. Update session cache
       const file = _filesCache.find(f => f.id === id);
       if (file) {
         file.name = newName;
@@ -192,10 +224,10 @@ export function createIDEService(deps: IDEDependencies): IDEService {
     },
 
     async moveNode(id: string, newParentId: string | null) {
-      // 1. DB Op
+      // 1. Persist
       await deps.db.moveFile(id, newParentId);
 
-      // 2. Optimistic Cache Update
+      // 2. Update session cache
       const file = _filesCache.find(f => f.id === id);
       if (file) {
         file.parentId = newParentId;
