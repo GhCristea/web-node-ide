@@ -1,6 +1,4 @@
-import type { FileNode } from '../FileTree';
 import type { FileRecord } from '../types/dbTypes';
-import type { WebContainer } from '@webcontainer/api';
 
 export type { FileRecord };
 
@@ -8,35 +6,29 @@ export interface IDEService {
   // Lifecycle
   initialize(): Promise<void>;
   
+  // State Access
+  getFiles(): FileNode[];
+  
   // File Operations
-  loadFiles(isWcReady: boolean, mount: (paths: Record<string, string>) => Promise<void>): Promise<FileNode[]>;
+  loadFiles(): Promise<FileNode[]>;
   getFileContent(id: string): Promise<string>;
   
-  saveFile(
-    id: string, 
-    content: string, 
-    isWcReady: boolean, 
-    writeFile: (path: string, content: string) => Promise<void>
-  ): Promise<void>;
-
+  saveFile(id: string, content: string): Promise<void>;
+  
   createNode(
     name: string, 
     type: 'file' | 'folder', 
     selectedFileId: string | null,
     explicitParentId?: string | null
-  ): Promise<void>;
+  ): Promise<FileNode[]>;
   
-  deleteNode(id: string): Promise<void>;
-  renameNode(id: string, newName: string): Promise<void>;
-  moveNode(id: string, newParentId: string | null): Promise<void>;
+  deleteNode(id: string): Promise<FileNode[]>;
+  renameNode(id: string, newName: string): Promise<FileNode[]>;
+  moveNode(id: string, newParentId: string | null): Promise<FileNode[]>;
   resetFileSystem(): Promise<void>;
 
   // Execution
-  runFile(
-    fileId: string, 
-    isWcReady: boolean, 
-    webContainer: WebContainer
-  ): Promise<void>;
+  runFile(fileId: string): Promise<void>;
 }
 
 export interface IDEDependencies {
@@ -54,4 +46,14 @@ export interface IDEDependencies {
   terminal: {
     write: (data: string) => void;
   };
+  onReady?: () => void; // Callback when runtime is ready
+}
+
+// Re-export for convenience
+export interface FileNode {
+  id: string;
+  name: string;
+  type: 'file' | 'folder';
+  children?: FileNode[];
+  parentId: string | null;
 }
