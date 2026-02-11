@@ -51,7 +51,7 @@ export function IDEProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (isWcReady && isDbReady) {
       fetchFiles().then(() => {
-        terminalRef.current?.write('\\x1b[32m✓ Node.js Environment Ready\\x1b[0m\\r\\n');
+        terminalRef.current?.write('\x1b[32m✓ Node.js Environment Ready\x1b[0m\r\n');
       });
     }
   }, [isWcReady, isDbReady, fetchFiles]);
