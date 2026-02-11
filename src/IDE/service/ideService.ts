@@ -1,6 +1,6 @@
-import { buildTree, generateFilePaths } from '../fileUtils';
+import type { WebContainer } from '@webcontainer/api';
+import { buildTree, generateFilePaths } from './fileUtils';
 import type { IDEService, IDEDependencies, FileRecord } from './types';
-import type { FileNode } from '../FileTree';
 
 export function createIDEService(deps: IDEDependencies): IDEService {
   let _filesCache: FileRecord[] = [];
@@ -23,8 +23,8 @@ export function createIDEService(deps: IDEDependencies): IDEService {
   const resolveParentId = (selectedFileId: string | null, explicitParentId?: string | null): string | null => {
     if (explicitParentId !== undefined) {
       return explicitParentId;
-    } 
-    
+    }
+
     if (selectedFileId) {
       const selectedNode = _filesCache.find(f => f.id === selectedFileId);
       if (selectedNode) {
@@ -42,7 +42,7 @@ export function createIDEService(deps: IDEDependencies): IDEService {
     async loadFiles(isWcReady: boolean, mount: (paths: Record<string, string>) => Promise<void>) {
       const allFiles = await deps.db.getFilesFromDb();
       _filesCache = allFiles;
-      
+
       const tree = buildTree(allFiles);
 
       if (isWcReady) {
@@ -56,7 +56,12 @@ export function createIDEService(deps: IDEDependencies): IDEService {
       return deps.db.getFileContent(id);
     },
 
-    async saveFile(id: string, content: string, isWcReady: boolean, writeFile: (path: string, content: string) => Promise<void>) {
+    async saveFile(
+      id: string,
+      content: string,
+      isWcReady: boolean,
+      writeFile: (path: string, content: string) => Promise<void>
+    ) {
       await deps.db.saveFileContent(id, content);
 
       // Update cache content locally to keep it consistent without re-fetching
@@ -74,7 +79,12 @@ export function createIDEService(deps: IDEDependencies): IDEService {
       }
     },
 
-    async createNode(name: string, type: 'file' | 'folder', selectedFileId: string | null, explicitParentId?: string | null) {
+    async createNode(
+      name: string,
+      type: 'file' | 'folder',
+      selectedFileId: string | null,
+      explicitParentId?: string | null
+    ) {
       const parentId = resolveParentId(selectedFileId, explicitParentId);
       await deps.db.createFile(name, parentId, type, type === 'file' ? '' : '');
     },
@@ -98,15 +108,13 @@ export function createIDEService(deps: IDEDependencies): IDEService {
       }
     },
 
-    async runFile(fileId: string, isWcReady: boolean, webContainer: any) {
+    async runFile(fileId: string, isWcReady: boolean, webContainer: WebContainer) {
       if (!isWcReady || !webContainer) return;
 
       const path = getPathFromCache(fileId);
       if (!path) return;
 
-      deps.terminal.write(
-        `\r\n\x1b[1;36m➤ Executing ${path}...\x1b[0m\r\n`
-      );
+      deps.terminal.write(`\r\n\x1b[1;36m➤ Executing ${path}...\x1b[0m\r\n`);
 
       try {
         const process = await webContainer.spawn('node', [path]);
@@ -118,9 +126,7 @@ export function createIDEService(deps: IDEDependencies): IDEService {
           })
         );
         const exitCode = await process.exit;
-        deps.terminal.write(
-          `\r\n\x1b[1;33mProcess exited with code ${exitCode}\x1b[0m\r\n`
-        );
+        deps.terminal.write(`\r\n\x1b[1;33mProcess exited with code ${exitCode}\x1b[0m\r\n`);
       } catch (err) {
         deps.terminal.write(`\x1b[1;31mError: ${err}\x1b[0m\r\n`);
       }

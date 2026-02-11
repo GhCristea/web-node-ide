@@ -1,14 +1,6 @@
-import {
-  useEffect,
-  useState,
-  useCallback,
-  type ReactNode,
-  useRef,
-  useMemo
-} from 'react';
+import { useEffect, useState, useCallback, type ReactNode, useRef, useMemo } from 'react';
 import * as db from './db';
 import type { TerminalHandle } from './TerminalComponent';
-import { findFileIdByPath } from './fileUtils';
 import type { FileNode } from './FileTree';
 import { useWebContainer } from './useWebContainer';
 import { createIDEService } from './service/ideService';
@@ -25,19 +17,12 @@ export function IDEProvider({ children }: { children: ReactNode }) {
 
   const terminalRef = useRef<TerminalHandle>(null);
 
-  const {
-    isReady: isWcReady,
-    mount,
-    writeFile,
-    webContainer
-  } = useWebContainer();
+  const { isReady: isWcReady, mount, writeFile, webContainer } = useWebContainer();
 
   const service = useMemo(() => {
     return createIDEService({
       db: db,
-      terminal: {
-        write: (data: string) => terminalRef.current?.write(data)
-      }
+      terminal: { write: (data: string) => terminalRef.current?.write(data) }
     });
   }, []);
 
@@ -46,16 +31,6 @@ export function IDEProvider({ children }: { children: ReactNode }) {
       setIsLoading(true);
       const tree = await service.loadFiles(isWcReady, mount);
       setFiles(tree);
-
-      // Handle initial URL navigation
-      const params = new URLSearchParams(window.location.search);
-      const initialPath = params.get('file');
-      if (initialPath) {
-        const fileId = findFileIdByPath(tree, initialPath);
-        if (fileId) {
-          setSelectedFileId(fileId);
-        }
-      }
     } catch (err) {
       setError(String(err));
     } finally {
@@ -76,9 +51,7 @@ export function IDEProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (isWcReady && isDbReady) {
       fetchFiles().then(() => {
-        terminalRef.current?.write(
-          '\\x1b[32m✓ Node.js Environment Ready\\x1b[0m\\r\\n'
-        );
+        terminalRef.current?.write('\\x1b[32m✓ Node.js Environment Ready\\x1b[0m\\r\\n');
       });
     }
   }, [isWcReady, isDbReady, fetchFiles]);
@@ -88,23 +61,13 @@ export function IDEProvider({ children }: { children: ReactNode }) {
       setFileContent('');
       return;
     }
-    service.getFileContent(selectedFileId).then((content) => {
+    service.getFileContent(selectedFileId).then(content => {
       setFileContent(content);
     });
   }, [service, selectedFileId]);
 
   const selectFile = (id: string | null) => {
     setSelectedFileId(id);
-    // URL management could also be delegated to service if needed
-    if (id) {
-      const url = new URL(window.location.href);
-      url.searchParams.set('file', id);
-      window.history.replaceState({}, '', url);
-    } else {
-      const url = new URL(window.location.href);
-      url.searchParams.delete('file');
-      window.history.replaceState({}, '', url);
-    }
   };
 
   const updateFileContent = (content: string) => {

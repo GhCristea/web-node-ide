@@ -1,13 +1,10 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { sqlite3Worker1Promiser } from '@sqlite.org/sqlite-wasm';
 
-let dbPromise: Promise<(command: string, params: any) => Promise<any>> | null =
-  null;
+let dbPromise: Promise<(command: string, params: any) => Promise<any>> | null = null;
 let dbId: string | null = null;
 
-async function createFileSystemSchema(
-  promiser: (command: string, params: any) => Promise<any>
-) {
+async function createFileSystemSchema(promiser: (command: string, params: any) => Promise<any>) {
   await promiser('exec', {
     sql: `
       CREATE TABLE IF NOT EXISTS files (
@@ -31,28 +28,19 @@ export async function initDb() {
     try {
       console.log('Loading and initializing SQLite3 module...');
 
-      const promiser = (await new Promise<unknown>((resolve) => {
-        const _promiser = sqlite3Worker1Promiser({
-          onready: () => resolve(_promiser)
-        });
+      const promiser = (await new Promise<unknown>(resolve => {
+        const _promiser = sqlite3Worker1Promiser({ onready: () => resolve(_promiser) });
       })) as (command: string, params: any) => Promise<any>;
 
       console.log('Done initializing. Opening database...');
 
       let openResponse;
       try {
-        openResponse = await promiser('open', {
-          filename: 'file:ide.sqlite3?vfs=opfs'
-        });
+        openResponse = await promiser('open', { filename: 'file:ide.sqlite3?vfs=opfs' });
         console.log('OPFS database opened:', openResponse.result.filename);
       } catch (opfsError) {
-        console.warn(
-          'OPFS is not available, falling back to in-memory database:',
-          opfsError
-        );
-        openResponse = await promiser('open', {
-          filename: ':memory:'
-        });
+        console.warn('OPFS is not available, falling back to in-memory database:', opfsError);
+        openResponse = await promiser('open', { filename: ':memory:' });
         console.log('In-memory database opened');
       }
 
@@ -197,9 +185,6 @@ export async function getFileContent(id: string): Promise<string> {
 
 export async function resetFileSystem() {
   const promiser = await initDb();
-  await promiser('exec', {
-    sql: 'DELETE FROM files',
-    dbId
-  });
+  await promiser('exec', { sql: 'DELETE FROM files', dbId });
   console.log('File system reset successfully');
 }

@@ -1,13 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import {
-  ChevronDown,
-  ChevronRight,
-  File,
-  Folder,
-  Trash2,
-  Edit2,
-  Plus
-} from 'lucide-react';
+import { ChevronDown, ChevronRight, File, Folder, Trash2, Edit2, Plus } from 'lucide-react';
 import { useIDE } from './useIDE';
 
 export interface FileNode {
@@ -140,14 +132,7 @@ const TreeItem = ({
         onMouseEnter={() => setIsHovered(true)}
         onMouseLeave={() => setIsHovered(false)}
       >
-        <span
-          style={{
-            marginRight: '4px',
-            display: 'flex',
-            alignItems: 'center',
-            opacity: 0.8
-          }}
-        >
+        <span style={{ marginRight: '4px', display: 'flex', alignItems: 'center', opacity: 0.8 }}>
           {
             isFolder ?
               isOpen ?
@@ -175,10 +160,10 @@ const TreeItem = ({
             ref={inputRef}
             type="text"
             value={editValue}
-            onChange={(e) => setEditValue(e.target.value)}
+            onChange={e => setEditValue(e.target.value)}
             onBlur={() => onRenameSubmit(node.id, editValue)}
             onKeyDown={handleKeyDown}
-            onClick={(e) => e.stopPropagation()}
+            onClick={e => e.stopPropagation()}
             className="file-rename-input"
             style={{
               background: '#3c3c3c',
@@ -214,7 +199,7 @@ const TreeItem = ({
 
       {isFolder && isOpen && node.children && (
         <div>
-          {node.children.map((child) => (
+          {node.children.map(child => (
             <TreeItem
               key={child.id}
               node={child}
@@ -236,17 +221,9 @@ const TreeItem = ({
   );
 };
 
-export function FileTree({
-  nodes,
-  onFileSelect,
-  selectedFileId
-}: FileTreeProps) {
+export function FileTree({ nodes, onFileSelect, selectedFileId }: FileTreeProps) {
   const { renameNode, deleteNode, createFile, moveNode } = useIDE();
-  const [contextMenu, setContextMenu] = useState<{
-    x: number;
-    y: number;
-    nodeId: string;
-  } | null>(null);
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; nodeId: string } | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draggedNode, setDraggedNode] = useState<FileNode | null>(null);
 
@@ -304,11 +281,7 @@ export function FileTree({
   };
 
   const onDrop = (_: React.DragEvent, targetNode: FileNode) => {
-    if (
-      draggedNode &&
-      targetNode.type === 'folder' &&
-      draggedNode.id !== targetNode.id
-    ) {
+    if (draggedNode && targetNode.type === 'folder' && draggedNode.id !== targetNode.id) {
       // Check for circular dependency (dropping parent into child)
       // Simplified check: we can't easily check all descendants here without tree traversal helper,
       // but basic self-drop is prevented.
@@ -342,7 +315,7 @@ export function FileTree({
     >
       <div className="file-tree-title">Explorer</div>
       <div className="file-tree-container">
-        {nodes.map((node) => (
+        {nodes.map(node => (
           <TreeItem
             key={node.id}
             node={node}
@@ -387,12 +360,8 @@ export function FileTree({
               color: '#cccccc',
               userSelect: 'none'
             }}
-            onMouseEnter={(e) =>
-              (e.currentTarget.style.backgroundColor = '#094771')
-            }
-            onMouseLeave={(e) =>
-              (e.currentTarget.style.backgroundColor = 'transparent')
-            }
+            onMouseEnter={e => (e.currentTarget.style.backgroundColor = '#094771')}
+            onMouseLeave={e => (e.currentTarget.style.backgroundColor = 'transparent')}
           >
             <Edit2 size={14} /> Rename
           </div>
@@ -409,12 +378,8 @@ export function FileTree({
               color: '#ff6b6b',
               userSelect: 'none'
             }}
-            onMouseEnter={(e) =>
-              (e.currentTarget.style.backgroundColor = '#094771')
-            }
-            onMouseLeave={(e) =>
-              (e.currentTarget.style.backgroundColor = 'transparent')
-            }
+            onMouseEnter={e => (e.currentTarget.style.backgroundColor = '#094771')}
+            onMouseLeave={e => (e.currentTarget.style.backgroundColor = 'transparent')}
           >
             <Trash2 size={14} /> Delete
           </div>
