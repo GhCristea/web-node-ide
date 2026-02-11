@@ -1,5 +1,6 @@
-import { useState } from 'react';
-import { ChevronDown, ChevronRight, File, Folder } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { ChevronDown, ChevronRight, File, Folder, Trash2, Edit2 } from 'lucide-react';
+import { useIDE } from './useIDE';
 
 export interface FileNode {
   id: string;
@@ -19,16 +20,32 @@ const TreeItem = ({
   node,
   onFileSelect,
   selectedFileId,
-  level = 0
+  level = 0,
+  onContextMenu,
+  editingId,
+  onRenameSubmit
 }: {
   node: FileNode;
   onFileSelect: (id: string) => void;
   selectedFileId: string | null;
   level?: number;
+  onContextMenu: (e: React.MouseEvent, nodeId: string) => void;
+  editingId: string | null;
+  onRenameSubmit: (id: string, newName: string) => void;
 }) => {
   const [isOpen, setIsOpen] = useState(false);
+  const [editValue, setEditValue] = useState(node.name);
+  const inputRef = useRef<HTMLInputElement>(null);
   const isFolder = node.type === 'folder';
   const isSelected = selectedFileId === node.id;
+  const isEditing = editingId === node.id;
+
+  useEffect(() => {
+    if (isEditing && inputRef.current) {
+      inputRef.current.focus();
+      inputRef.current.select();
+    }
+  }, [isEditing]);
 
   const handleClick = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -39,12 +56,28 @@ const TreeItem = ({
     }
   };
 
+  const handleRightClick = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    onContextMenu(e, node.id);
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      onRenameSubmit(node.id, editValue);
+    } else if (e.key === 'Escape') {
+      // Cancel edit - handled by parent usually or just ignore
+      onRenameSubmit(node.id, node.name); // Revert
+    }
+  };
+
   return (
     <div>
       <div
         className={`tree-item ${isSelected ? 'selected' : ''}`}
         style={{ paddingLeft: `${10 + level * 12}px` }}
         onClick={handleClick}
+        onContextMenu={handleRightClick}
       >
         <span
           style={{
@@ -76,7 +109,27 @@ const TreeItem = ({
           : <File size={14} strokeWidth={1.5} />}
         </span>
 
-        <span>{node.name}</span>
+        {isEditing ?
+          <input
+            ref={inputRef}
+            type="text"
+            value={editValue}
+            onChange={(e) => setEditValue(e.target.value)}
+            onBlur={() => onRenameSubmit(node.id, editValue)}
+            onKeyDown={handleKeyDown}
+            onClick={(e) => e.stopPropagation()}
+            className="file-rename-input"
+            style={{
+              background: '#3c3c3c',
+              border: '1px solid #007fd4',
+              color: 'white',
+              outline: 'none',
+              padding: '1px 4px',
+              fontSize: 'inherit',
+              width: '100%'
+            }}
+          />
+        : <span>{node.name}</span>}
       </div>
 
       {isFolder && isOpen && node.children && (
@@ -88,6 +141,9 @@ const TreeItem = ({
               onFileSelect={onFileSelect}
               selectedFileId={selectedFileId}
               level={level + 1}
+              onContextMenu={onContextMenu}
+              editingId={editingId}
+              onRenameSubmit={onRenameSubmit}
             />
           ))}
         </div>
@@ -101,8 +157,48 @@ export function FileTree({
   onFileSelect,
   selectedFileId
 }: FileTreeProps) {
+  const { renameNode, deleteNode } = useIDE();
+  const [contextMenu, setContextMenu] = useState<{
+    x: number;
+    y: number;
+    nodeId: string;
+  } | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
+
+  useEffect(() => {
+    const handleClickOutside = () => setContextMenu(null);
+    window.addEventListener('click', handleClickOutside);
+    return () => window.removeEventListener('click', handleClickOutside);
+  }, []);
+
+  const handleContextMenu = (e: React.MouseEvent, nodeId: string) => {
+    setContextMenu({ x: e.clientX, y: e.clientY, nodeId });
+  };
+
+  const handleRenameSubmit = (id: string, newName: string) => {
+    if (newName && newName.trim() !== '') {
+      renameNode(id, newName);
+    }
+    setEditingId(null);
+  };
+
+  const handleDelete = () => {
+    if (contextMenu?.nodeId) {
+      if (confirm('Delete this item?')) {
+        deleteNode(contextMenu.nodeId);
+      }
+    }
+  };
+
+  const handleStartRename = () => {
+    if (contextMenu?.nodeId) {
+      setEditingId(contextMenu.nodeId);
+      setContextMenu(null); // Close menu
+    }
+  };
+
   return (
-    <div className="sidebar">
+    <div className="sidebar" style={{ position: 'relative' }}>
       <div className="file-tree-title">Explorer</div>
       <div className="file-tree-container">
         {nodes.map((node) => (
@@ -111,9 +207,66 @@ export function FileTree({
             node={node}
             onFileSelect={onFileSelect}
             selectedFileId={selectedFileId}
+            onContextMenu={handleContextMenu}
+            editingId={editingId}
+            onRenameSubmit={handleRenameSubmit}
           />
         ))}
       </div>
+
+      {contextMenu && (
+        <div
+          className="context-menu"
+          style={{
+            position: 'fixed',
+            top: contextMenu.y,
+            left: contextMenu.x,
+            backgroundColor: '#252526',
+            border: '1px solid #454545',
+            borderRadius: '4px',
+            padding: '4px 0',
+            zIndex: 1000,
+            boxShadow: '0 2px 8px rgba(0,0,0,0.5)'
+          }}
+        >
+          <div
+            className="context-menu-item"
+            onClick={handleStartRename}
+            style={{
+              padding: '6px 12px',
+              cursor: 'pointer',
+              fontSize: '13px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              color: '#cccccc',
+              userSelect: 'none'
+            }}
+            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#094771'}
+            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+          >
+            <Edit2 size={14} /> Rename
+          </div>
+          <div
+            className="context-menu-item"
+            onClick={handleDelete}
+            style={{
+              padding: '6px 12px',
+              cursor: 'pointer',
+              fontSize: '13px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              color: '#ff6b6b',
+              userSelect: 'none'
+            }}
+            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#094771'}
+            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+          >
+            <Trash2 size={14} /> Delete
+          </div>
+        </div>
+      )}
     </div>
   );
 }
