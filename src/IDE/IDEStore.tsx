@@ -8,11 +8,7 @@ import {
 } from 'react';
 import * as db from './db';
 import type { TerminalHandle } from './TerminalComponent';
-import {
-  findFileNodeById,
-  getFilePath,
-  findFileIdByPath
-} from './fileUtils';
+import { findFileIdByPath } from './fileUtils';
 import type { FileNode } from './FileTree';
 import { useWebContainer } from './useWebContainer';
 import { createIDEService } from './service/ideService';
@@ -99,13 +95,11 @@ export function IDEProvider({ children }: { children: ReactNode }) {
 
   const selectFile = (id: string | null) => {
     setSelectedFileId(id);
+    // URL management could also be delegated to service if needed
     if (id) {
-      const path = getFilePath(files, id);
-      if (path) {
-        const url = new URL(window.location.href);
-        url.searchParams.set('file', path);
-        window.history.replaceState({}, '', url);
-      }
+      const url = new URL(window.location.href);
+      url.searchParams.set('file', id);
+      window.history.replaceState({}, '', url);
     } else {
       const url = new URL(window.location.href);
       url.searchParams.delete('file');
@@ -121,7 +115,7 @@ export function IDEProvider({ children }: { children: ReactNode }) {
     if (!selectedFileId) return;
 
     try {
-      await service.saveFile(selectedFileId, fileContent, isWcReady, writeFile, files);
+      await service.saveFile(selectedFileId, fileContent, isWcReady, writeFile);
     } catch (err) {
       console.error(err);
       setError('Failed to save file');
@@ -134,21 +128,7 @@ export function IDEProvider({ children }: { children: ReactNode }) {
     explicitParentId?: string | null
   ) => {
     try {
-      let parentId: string | null = null;
-
-      if (explicitParentId !== undefined) {
-        parentId = explicitParentId;
-      } else if (selectedFileId) {
-        const selectedNode = findFileNodeById(files, selectedFileId);
-        if (selectedNode) {
-          parentId =
-            selectedNode.type === 'folder' ?
-              selectedNode.id
-            : selectedNode.parentId;
-        }
-      }
-
-      await service.createNode(name, type, parentId);
+      await service.createNode(name, type, selectedFileId, explicitParentId);
       await fetchFiles();
     } catch {
       setError(`Failed to create ${type}`);
@@ -193,9 +173,7 @@ export function IDEProvider({ children }: { children: ReactNode }) {
 
     setIsRunning(true);
     try {
-      await service.runFile(selectedFileId, isWcReady, webContainer, files);
-    } catch (err) {
-       // service handles logging
+      await service.runFile(selectedFileId, isWcReady, webContainer);
     } finally {
       setIsRunning(false);
     }
