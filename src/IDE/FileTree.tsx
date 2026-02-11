@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { ChevronDown, ChevronRight, File, Folder, Trash2, Edit2 } from 'lucide-react';
+import { ChevronDown, ChevronRight, File, Folder, Trash2, Edit2, Plus } from 'lucide-react';
 import { useIDE } from './useIDE';
 
 export interface FileNode {
@@ -23,7 +23,8 @@ const TreeItem = ({
   level = 0,
   onContextMenu,
   editingId,
-  onRenameSubmit
+  onRenameSubmit,
+  onCreateFile
 }: {
   node: FileNode;
   onFileSelect: (id: string) => void;
@@ -32,9 +33,11 @@ const TreeItem = ({
   onContextMenu: (e: React.MouseEvent, nodeId: string) => void;
   editingId: string | null;
   onRenameSubmit: (id: string, newName: string) => void;
+  onCreateFile: (parentId: string) => void;
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [editValue, setEditValue] = useState(node.name);
+  const [isHovered, setIsHovered] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const isFolder = node.type === 'folder';
   const isSelected = selectedFileId === node.id;
@@ -62,12 +65,16 @@ const TreeItem = ({
     onContextMenu(e, node.id);
   };
 
+  const handleCreateClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    onCreateFile(node.id);
+  };
+
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter') {
       onRenameSubmit(node.id, editValue);
     } else if (e.key === 'Escape') {
-      // Cancel edit - handled by parent usually or just ignore
-      onRenameSubmit(node.id, node.name); // Revert
+      onRenameSubmit(node.id, node.name);
     }
   };
 
@@ -78,6 +85,8 @@ const TreeItem = ({
         style={{ paddingLeft: `${10 + level * 12}px` }}
         onClick={handleClick}
         onContextMenu={handleRightClick}
+        onMouseEnter={() => setIsHovered(true)}
+        onMouseLeave={() => setIsHovered(false)}
       >
         <span
           style={{
@@ -129,7 +138,26 @@ const TreeItem = ({
               width: '100%'
             }}
           />
-        : <span>{node.name}</span>}
+        : <span style={{ flex: 1 }}>{node.name}</span>}
+
+        {isFolder && isHovered && !isEditing && (
+          <span
+            onClick={handleCreateClick}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              width: '20px',
+              height: '20px',
+              cursor: 'pointer',
+              color: '#cccccc',
+              marginRight: '4px'
+            }}
+            title="New File"
+          >
+            <Plus size={14} />
+          </span>
+        )}
       </div>
 
       {isFolder && isOpen && node.children && (
@@ -144,6 +172,7 @@ const TreeItem = ({
               onContextMenu={onContextMenu}
               editingId={editingId}
               onRenameSubmit={onRenameSubmit}
+              onCreateFile={onCreateFile}
             />
           ))}
         </div>
@@ -157,7 +186,7 @@ export function FileTree({
   onFileSelect,
   selectedFileId
 }: FileTreeProps) {
-  const { renameNode, deleteNode } = useIDE();
+  const { renameNode, deleteNode, createFile } = useIDE();
   const [contextMenu, setContextMenu] = useState<{
     x: number;
     y: number;
@@ -197,6 +226,13 @@ export function FileTree({
     }
   };
 
+  const handleCreateFile = async (parentId: string) => {
+    const name = prompt('Enter file name:');
+    if (name) {
+      await createFile(name, 'file', parentId);
+    }
+  };
+
   return (
     <div className="sidebar" style={{ position: 'relative' }}>
       <div className="file-tree-title">Explorer</div>
@@ -210,6 +246,7 @@ export function FileTree({
             onContextMenu={handleContextMenu}
             editingId={editingId}
             onRenameSubmit={handleRenameSubmit}
+            onCreateFile={handleCreateFile}
           />
         ))}
       </div>
