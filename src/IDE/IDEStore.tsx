@@ -3,30 +3,19 @@ import {
   useState,
   useCallback,
   type ReactNode,
-  useRef
+  useRef,
+  useMemo
 } from 'react';
-import {
-  getFilesFromDb,
-  createFile as dbCreateFile,
-  saveFileContent as dbSaveFileContent,
-  renameFile as dbRenameFile,
-  moveFile as dbMoveFile,
-  deleteFile as dbDeleteFile,
-  initDb,
-  resetFileSystem as dbResetFileSystem,
-  generateFilePaths,
-  getFileContent
-} from './db';
+import * as db from './db';
 import type { TerminalHandle } from './TerminalComponent';
 import {
   findFileNodeById,
   getFilePath,
-  buildTree,
   findFileIdByPath
 } from './fileUtils';
 import type { FileNode } from './FileTree';
 import { useWebContainer } from './useWebContainer';
-
+import { createIDEService } from './service/ideService';
 import { IDEContext } from './IDEContext';
 
 export function IDEProvider({ children }: { children: ReactNode }) {
@@ -47,21 +36,19 @@ export function IDEProvider({ children }: { children: ReactNode }) {
     webContainer
   } = useWebContainer();
 
-  useEffect(() => {
-    initDb()
-      .then(async () => {
-        setIsDbReady(true);
-        await fetchFiles();
-      })
-      .catch((err: unknown) => setError(`DB Init Failed: ${err}`));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+  const service = useMemo(() => {
+    return createIDEService({
+      db: db,
+      terminal: {
+        write: (data: string) => terminalRef.current?.write(data)
+      }
+    });
   }, []);
 
   const fetchFiles = useCallback(async () => {
     try {
       setIsLoading(true);
-      const allFiles = await getFilesFromDb();
-      const tree = buildTree(allFiles);
+      const tree = await service.loadFiles(isWcReady, mount);
       setFiles(tree);
 
       // Handle initial URL navigation
@@ -73,22 +60,28 @@ export function IDEProvider({ children }: { children: ReactNode }) {
           setSelectedFileId(fileId);
         }
       }
-
-      if (isWcReady) {
-        await mount(generateFilePaths(allFiles));
-      }
     } catch (err) {
       setError(String(err));
     } finally {
       setIsLoading(false);
     }
-  }, [isWcReady, mount]);
+  }, [service, isWcReady, mount]);
+
+  useEffect(() => {
+    db.initDb()
+      .then(async () => {
+        setIsDbReady(true);
+        await service.initialize();
+        await fetchFiles();
+      })
+      .catch((err: unknown) => setError(`DB Init Failed: ${err}`));
+  }, [service, fetchFiles]);
 
   useEffect(() => {
     if (isWcReady && isDbReady) {
       fetchFiles().then(() => {
         terminalRef.current?.write(
-          '\x1b[32m✓ Node.js Environment Ready\x1b[0m\r\n'
+          '\\x1b[32m✓ Node.js Environment Ready\\x1b[0m\\r\\n'
         );
       });
     }
@@ -99,10 +92,10 @@ export function IDEProvider({ children }: { children: ReactNode }) {
       setFileContent('');
       return;
     }
-    getFileContent(selectedFileId).then((content) => {
+    service.getFileContent(selectedFileId).then((content) => {
       setFileContent(content);
     });
-  }, [selectedFileId]);
+  }, [service, selectedFileId]);
 
   const selectFile = (id: string | null) => {
     setSelectedFileId(id);
@@ -128,15 +121,7 @@ export function IDEProvider({ children }: { children: ReactNode }) {
     if (!selectedFileId) return;
 
     try {
-      await dbSaveFileContent(selectedFileId, fileContent);
-
-      if (isWcReady) {
-        const path = getFilePath(files, selectedFileId);
-        if (path) {
-          await writeFile(path, fileContent);
-          console.log(`Synced ${path}`);
-        }
-      }
+      await service.saveFile(selectedFileId, fileContent, isWcReady, writeFile, files);
     } catch (err) {
       console.error(err);
       setError('Failed to save file');
@@ -163,7 +148,7 @@ export function IDEProvider({ children }: { children: ReactNode }) {
         }
       }
 
-      await dbCreateFile(name, parentId, type, type === 'file' ? '' : '');
+      await service.createNode(name, type, parentId);
       await fetchFiles();
     } catch {
       setError(`Failed to create ${type}`);
@@ -172,7 +157,7 @@ export function IDEProvider({ children }: { children: ReactNode }) {
 
   const renameNode = async (id: string, newName: string) => {
     try {
-      await dbRenameFile(id, newName);
+      await service.renameNode(id, newName);
       await fetchFiles();
     } catch (err) {
       console.error(err);
@@ -182,7 +167,7 @@ export function IDEProvider({ children }: { children: ReactNode }) {
 
   const moveNode = async (id: string, newParentId: string | null) => {
     try {
-      await dbMoveFile(id, newParentId);
+      await service.moveNode(id, newParentId);
       await fetchFiles();
     } catch (err) {
       console.error(err);
@@ -192,7 +177,7 @@ export function IDEProvider({ children }: { children: ReactNode }) {
 
   const deleteNode = async (id: string) => {
     try {
-      await dbDeleteFile(id);
+      await service.deleteNode(id);
       if (selectedFileId === id) {
         selectFile(null);
       }
@@ -206,39 +191,18 @@ export function IDEProvider({ children }: { children: ReactNode }) {
   const run = async () => {
     if (!selectedFileId || !isWcReady || !webContainer) return;
 
-    const path = getFilePath(files, selectedFileId);
-    if (!path) return;
-
     setIsRunning(true);
-    terminalRef.current?.write(
-      `\r\n\x1b[1;36m➤ Executing ${path}...\x1b[0m\r\n`
-    );
-
     try {
-      const process = await webContainer.spawn('node', [path]);
-      process.output.pipeTo(
-        new WritableStream({
-          write(data) {
-            terminalRef.current?.write(data);
-          }
-        })
-      );
-      const exitCode = await process.exit;
-      terminalRef.current?.write(
-        `\r\n\x1b[1;33mProcess exited with code ${exitCode}\x1b[0m\r\n`
-      );
+      await service.runFile(selectedFileId, isWcReady, webContainer, files);
     } catch (err) {
-      terminalRef.current?.write(`\x1b[1;31mError: ${err}\x1b[0m\r\n`);
+       // service handles logging
     } finally {
       setIsRunning(false);
     }
   };
 
   const reset = async () => {
-    if (confirm('Reset file system?')) {
-      await dbResetFileSystem();
-      window.location.reload();
-    }
+    await service.resetFileSystem();
   };
 
   return (
