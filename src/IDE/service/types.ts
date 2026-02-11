@@ -16,15 +16,32 @@ export interface IDEService {
   // File Operations
   loadFiles(isWcReady: boolean, mount: (paths: Record<string, string>) => Promise<void>): Promise<FileNode[]>;
   getFileContent(id: string): Promise<string>;
-  saveFile(id: string, content: string, isWcReady: boolean, writeFile: (path: string, content: string) => Promise<void>, files: FileNode[]): Promise<void>;
-  createNode(name: string, type: 'file' | 'folder', parentId: string | null): Promise<void>;
+  
+  saveFile(
+    id: string, 
+    content: string, 
+    isWcReady: boolean, 
+    writeFile: (path: string, content: string) => Promise<void>
+  ): Promise<void>;
+
+  createNode(
+    name: string, 
+    type: 'file' | 'folder', 
+    selectedFileId: string | null,
+    explicitParentId?: string | null
+  ): Promise<void>;
+  
   deleteNode(id: string): Promise<void>;
   renameNode(id: string, newName: string): Promise<void>;
   moveNode(id: string, newParentId: string | null): Promise<void>;
   resetFileSystem(): Promise<void>;
 
   // Execution
-  runFile(fileId: string, isWcReady: boolean, webContainer: any, files: FileNode[]): Promise<void>;
+  runFile(
+    fileId: string, 
+    isWcReady: boolean, 
+    webContainer: any
+  ): Promise<void>;
 }
 
 export interface IDEDependencies {
