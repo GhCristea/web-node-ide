@@ -9,6 +9,8 @@ import {
   getFilesFromDb,
   createFile as dbCreateFile,
   saveFileContent as dbSaveFileContent,
+  renameFile as dbRenameFile,
+  deleteFile as dbDeleteFile,
   initDb,
   resetFileSystem as dbResetFileSystem,
   generateFilePaths,
@@ -160,6 +162,29 @@ export function IDEProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const renameNode = async (id: string, newName: string) => {
+    try {
+      await dbRenameFile(id, newName);
+      await fetchFiles();
+    } catch (err) {
+      console.error(err);
+      setError('Failed to rename');
+    }
+  };
+
+  const deleteNode = async (id: string) => {
+    try {
+      await dbDeleteFile(id);
+      if (selectedFileId === id) {
+        selectFile(null);
+      }
+      await fetchFiles();
+    } catch (err) {
+      console.error(err);
+      setError('Failed to delete');
+    }
+  };
+
   const run = async () => {
     if (!selectedFileId || !isWcReady || !webContainer) return;
 
@@ -213,6 +238,8 @@ export function IDEProvider({ children }: { children: ReactNode }) {
         updateFileContent,
         saveFile,
         createFile,
+        renameNode,
+        deleteNode,
         run,
         reset
       }}
