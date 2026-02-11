@@ -1,4 +1,4 @@
-import type { FileRecord } from '../service/types';
+import type { FileRecord } from '../types/dbTypes';
 
 export type WorkerRequest =
   | { type: 'INIT_DB'; reqId: string }
