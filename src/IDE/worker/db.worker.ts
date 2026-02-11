@@ -1,4 +1,4 @@
-import * as db from '../db';
+import * as db from './db.impl';
 import type { WorkerRequest, WorkerResponse } from './types';
 
 self.onmessage = async (e: MessageEvent<WorkerRequest>) => {
@@ -13,9 +13,7 @@ self.onmessage = async (e: MessageEvent<WorkerRequest>) => {
       }
       case 'GET_FILES': {
         const files = await db.getFilesFromDb();
-        // Map db FileRecord to service FileRecord if needed, assuming they match for now
-        // Types in db.ts: FileRecord { id, name, parentId, type, content, updated_at }
-        postResponse({ type: 'GET_FILES_SUCCESS', reqId, files: files as any });
+        postResponse({ type: 'GET_FILES_SUCCESS', reqId, files });
         break;
       }
       case 'GET_FILE_CONTENT': {
