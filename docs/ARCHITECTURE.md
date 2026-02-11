@@ -2,36 +2,50 @@
 
 ## Core Concepts
 
-This application simulates a full IDE environment in the browser. It does NOT have a traditional backend.
+This application simulates a full IDE environment in the browser and does **not** have a traditional backend.
 
-### 1. Unified State Management (IDEStore)
+## Layers
 
-- **Role**: Central coordinator for the entire IDE.
+### 1. UI Layer (React)
+
 - **Location**: `src/IDE/IDEStore.tsx` (Provider) and `src/IDE/IDEContext.ts` (Context).
 - **Responsibilities**:
-  - Manages file tree state and selected file.
-  - Handles URL persistence for navigation (`?file=path/to/file`).
-  - Orchestrates synchronization between the DB and WebContainer.
-  - Exposes actions like `saveFile`, `createFile`, `run`, and `reset`.
+  - Holds view state (selected file id, loading/running flags, errors).
+  - Triggers service actions and refreshes the file tree when needed.
+  - Renders editor/terminal/file tree via components (not described here).
 
-### 2. File System (Source of Truth)
+### 2. Service Layer (Orchestration)
 
-- **Storage**: SQLite via OPFS (Origin Private File System).
-- **Access**: All file CRUD operations must go through `src/IDE/db.ts`.
-- **Constraint**: Do not try to use the native browser `fs` API directly; use the database helpers.
-- **Optimization**: File list fetches structural data; file content is fetched on demand to reduce memory usage.
+- **Location**: `src/IDE/service/ideService.ts`.
+- **Responsibilities**:
+  - Orchestrates file operations, persistence, runtime sync, and process execution.
+  - Keeps a lightweight in-memory cache of file records for path resolution.
+  - Encapsulates “where does a new file go?” logic (parent resolution).
 
-### 3. Runtime Environment (WebContainers)
+### 3. Persistence Layer (File system source of truth)
 
-- **Role**: Executes Node.js code (user projects).
+- **Storage**: SQLite via OPFS (Origin Private File System) when available.
+- **Access**: All file CRUD operations go through `src/IDE/db.ts`.
+- **Notes**:
+  - File listing fetches metadata; file content is fetched on demand.
+  - Reset is implemented as DB truncate.
+
+### 4. Runtime Layer (WebContainers)
+
+- **Role**: Executes Node.js code in-browser.
 - **Integration**: Managed via `src/IDE/useWebContainer.ts` hook.
 - **Syncing**:
-  - *Boot*: Auto-boots on mount.
-  - *Mount*: `IDEStore` hydrates the container with files from SQLite on ready.
-  - *Write*: `IDEStore` writes to BOTH SQLite and `WebContainer.fs` on save.
+  - Mount: service mounts a snapshot of file paths into the container when ready.
+  - Save: service writes to SQLite and (if ready) also writes to `WebContainer.fs`.
+  - Run: service spawns `node <path>` and pipes output to the terminal.
 
-### 4. Terminal
+### 5. Terminal
 
 - **Tech**: xterm.js + xterm-addon-fit.
-- **Component**: `src/TerminalComponent.tsx`.
-- **Connection**: `IDEStore` pipes output from `WebContainer` processes directly to the xterm instance via a ref.
+- **Component**: `src/IDE/TerminalComponent.tsx`.
+- **Connection**: UI passes a small terminal adapter (currently `terminalRef.write`) to the service.
+
+## Intentionally Not Supported
+
+- URL-driven file selection / deep-linking.
+- Server-side execution.

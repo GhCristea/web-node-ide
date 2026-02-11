@@ -1,65 +1,56 @@
 # Web Node IDE
 
-This project is a browser-based Node.js IDE that allows you to write, run, and execute Node.js code directly in your browser. It leverages WebContainer for a full Node.js runtime, Monaco Editor for a rich coding experience, and SQLite WASM with OPFS for persistent file storage.
+A browser-based Node.js IDE that allows you to write, run, and execute Node.js code directly in your browser.
 
-## Features
+## Key Features
 
-- **In-Browser Node.js Runtime**: powered by WebContainers, allowing you to run Node.js commands like `npm install` and `node index.js` directly in the browser.
-- **Monaco Code Editor**: Professional-grade code editing with syntax highlighting and IntelliSense.
-- **Integrated Terminal**: Includes a fully functional terminal based on xterm.js for interacting with the runtime.
-- **Persistent Storage**: Uses Origin Private File System (OPFS) via SQLite WASM to persist your files and project structure across sessions.
-- **File Explorer**: Create, manage, and organize files and folders with ease.
+- **In-Browser Runtime**: Powered by **WebContainers**, enabling native `npm install` and node execution.
+- **Persistent Storage**: **SQLite WASM + OPFS** ensures your files are saved reliably between sessions.
+- **Service-Based Architecture**: Separation of concerns between UI, filesystem, and runtime logic.
+- **Monaco Editor**: VS Code's editor engine with syntax highlighting and IntelliSense.
+- **Xterm.js Terminal**: Fully integrated terminal for command output and interaction.
 
-## Technologies Used
+## Architecture
 
-- **React**: UI library for building the interface.
-- **WebContainer API**: Provides the in-browser Node.js runtime environment.
-- **Monaco Editor**: The code editor that powers VS Code.
-- **xterm.js**: For the terminal component.
-- **SQLite WASM**: For efficient and persistent data storage.
-- **Chakra UI**: For a responsive and accessible user interface.
-- **Vite**: For fast build tooling.
+This project uses a **Service Layer Pattern** to decouple business logic from the React UI:
 
-## Prerequisites
+- **UI Layer (`IDEStore`)**: Manages view state (selected file, loading flags) and connects components to the service.
+- **Service Layer (`ideService`)**: Orchestrates file operations, database sync, and WebContainer execution.
+- **Infrastructure (`db`, `webContainer`)**: Handles low-level persistence and runtime environments.
 
-- **Modern Browser**: Chrome, Edge, or another Chromium-based browser is required for WebContainer support.
-- **HTTPS or Localhost**: The application must be served over HTTPS or from localhost due to security requirements (Cross-Origin Isolation).
+## Technologies
 
-## Setup
+- **Core**: React 19, TypeScript, Vite
+- **Runtime**: @webcontainer/api
+- **Storage**: @sqlite.org/sqlite-wasm (OPFS)
+- **Editor**: @monaco-editor/react
+- **Terminal**: @xterm/xterm
 
-1. **Clone the repository:**
+## Setup & Running
 
+1. **Clone & Install**
    ```bash
    git clone https://github.com/GhCristea/web-node-ide
    cd web-node-ide
-   ```
-
-2. **Install dependencies:**
-
-   ```bash
    npm install
    ```
 
-3. **Start the development server:**
-
+2. **Run Development Server**
    ```bash
    npm run dev
    ```
-
-4. **Open your browser:**
-   Navigate to `http://localhost:5173`.
+   *Note: Must be served over HTTPS or localhost due to `SharedArrayBuffer` security requirements.*
 
 ## Usage
 
-- **Creating Files**: Use the buttons in the file explorer to create new files or folders.
-- **Editing**: Select a file to open it in the editor. Changes are saved automatically on focus loss or manually via the "Save File" button.
-- **Running Code**: Click the "Run" button to execute the currently open file in the Node.js environment.
-- **Terminal**: Use the integrated terminal to interact with the environment.
+- **File Management**: Create files/folders via the explorer. Logic handles parent resolution automatically.
+- **Execution**: Click "Run" to execute the active file. Output streams directly to the integrated terminal.
+- **Persistence**: Files are auto-saved to OPFS. Use "Reset FS" to clear the database if needed.
 
-## Troubleshooting
+## Requirements
 
-- **WebContainer Issues**: Ensure you are using a Chromium-based browser. WebContainers require `SharedArrayBuffer` which necessitates Cross-Origin Isolation headers (COOP/COEP).
-- **FileSystem**: If you encounter issues with file persistence, try resetting the file system using the "Reset FS" button.
+- A Chromium-based browser (Chrome, Edge) for full WebContainer support.
+- Cross-Origin Isolation headers (COOP/COEP) are required (handled by Vite config).
 
 ## License
 
