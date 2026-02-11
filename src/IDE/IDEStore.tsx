@@ -142,10 +142,17 @@ export function IDEProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const createFile = async (name: string, type: 'file' | 'folder') => {
+  const createFile = async (
+    name: string,
+    type: 'file' | 'folder',
+    explicitParentId?: string | null
+  ) => {
     try {
       let parentId: string | null = null;
-      if (selectedFileId) {
+
+      if (explicitParentId !== undefined) {
+        parentId = explicitParentId;
+      } else if (selectedFileId) {
         const selectedNode = findFileNodeById(files, selectedFileId);
         if (selectedNode) {
           parentId =
