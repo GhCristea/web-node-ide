@@ -1,5 +1,13 @@
 import { useState, useEffect, useRef } from 'react';
-import { ChevronDown, ChevronRight, File, Folder, Trash2, Edit2, Plus } from 'lucide-react';
+import {
+  ChevronDown,
+  ChevronRight,
+  File,
+  Folder,
+  Trash2,
+  Edit2,
+  Plus
+} from 'lucide-react';
 import { useIDE } from './useIDE';
 
 export interface FileNode {
@@ -94,8 +102,8 @@ const TreeItem = ({
     e.preventDefault();
     e.stopPropagation();
     if (isFolder) {
-       setIsDragOver(true);
-       onDragOver(e, node);
+      setIsDragOver(true);
+      onDragOver(e, node);
     }
   };
 
@@ -103,7 +111,7 @@ const TreeItem = ({
     e.preventDefault();
     e.stopPropagation();
     setIsDragOver(false);
-  }
+  };
 
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
@@ -122,7 +130,7 @@ const TreeItem = ({
     >
       <div
         className={`tree-item ${isSelected ? 'selected' : ''}`}
-        style={{ 
+        style={{
           paddingLeft: `${10 + level * 12}px`,
           backgroundColor: isDragOver ? '#37373d' : undefined,
           border: isDragOver ? '1px dashed #007fd4' : '1px solid transparent'
@@ -282,48 +290,52 @@ export function FileTree({
   };
 
   const onDragStart = (e: React.DragEvent, node: FileNode) => {
-     setDraggedNode(node);
-     e.dataTransfer.effectAllowed = 'move';
-     // Optional: set drag image
+    setDraggedNode(node);
+    e.dataTransfer.effectAllowed = 'move';
+    // Optional: set drag image
   };
 
   const onDragOver = (e: React.DragEvent, node: FileNode) => {
-      // Only allow drop if target is a folder and not the dragged node itself or its descendant
-      if (node.type === 'folder' && draggedNode && draggedNode.id !== node.id) {
-          e.preventDefault(); // Allow drop
-          e.dataTransfer.dropEffect = 'move';
-      }
+    // Only allow drop if target is a folder and not the dragged node itself or its descendant
+    if (node.type === 'folder' && draggedNode && draggedNode.id !== node.id) {
+      e.preventDefault(); // Allow drop
+      e.dataTransfer.dropEffect = 'move';
+    }
   };
 
-  const onDrop = (e: React.DragEvent, targetNode: FileNode) => {
-      if (draggedNode && targetNode.type === 'folder' && draggedNode.id !== targetNode.id) {
-          // Check for circular dependency (dropping parent into child)
-           // Simplified check: we can't easily check all descendants here without tree traversal helper,
-           // but basic self-drop is prevented.
-           // Ideally we check if targetNode is a descendant of draggedNode.
-          
-           moveNode(draggedNode.id, targetNode.id);
-           setDraggedNode(null);
-      }
+  const onDrop = (_: React.DragEvent, targetNode: FileNode) => {
+    if (
+      draggedNode &&
+      targetNode.type === 'folder' &&
+      draggedNode.id !== targetNode.id
+    ) {
+      // Check for circular dependency (dropping parent into child)
+      // Simplified check: we can't easily check all descendants here without tree traversal helper,
+      // but basic self-drop is prevented.
+      // Ideally we check if targetNode is a descendant of draggedNode.
+
+      moveNode(draggedNode.id, targetNode.id);
+      setDraggedNode(null);
+    }
   };
-  
+
   // Handle drop on root (sidebar background)
   const onRootDrop = (e: React.DragEvent) => {
-       e.preventDefault();
-       if (draggedNode) {
-           moveNode(draggedNode.id, null); // Move to root
-           setDraggedNode(null);
-       }
-  }
-  
+    e.preventDefault();
+    if (draggedNode) {
+      moveNode(draggedNode.id, null); // Move to root
+      setDraggedNode(null);
+    }
+  };
+
   const onRootDragOver = (e: React.DragEvent) => {
-      e.preventDefault();
-      e.dataTransfer.dropEffect = 'move';
-  }
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+  };
 
   return (
-    <div 
-      className="sidebar" 
+    <div
+      className="sidebar"
       style={{ position: 'relative', height: '100%' }}
       onDragOver={onRootDragOver}
       onDrop={onRootDrop}
@@ -375,8 +387,12 @@ export function FileTree({
               color: '#cccccc',
               userSelect: 'none'
             }}
-            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#094771'}
-            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+            onMouseEnter={(e) =>
+              (e.currentTarget.style.backgroundColor = '#094771')
+            }
+            onMouseLeave={(e) =>
+              (e.currentTarget.style.backgroundColor = 'transparent')
+            }
           >
             <Edit2 size={14} /> Rename
           </div>
@@ -393,8 +409,12 @@ export function FileTree({
               color: '#ff6b6b',
               userSelect: 'none'
             }}
-            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#094771'}
-            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+            onMouseEnter={(e) =>
+              (e.currentTarget.style.backgroundColor = '#094771')
+            }
+            onMouseLeave={(e) =>
+              (e.currentTarget.style.backgroundColor = 'transparent')
+            }
           >
             <Trash2 size={14} /> Delete
           </div>

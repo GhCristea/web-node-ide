@@ -251,6 +251,7 @@ export function IDEProvider({ children }: { children: ReactNode }) {
         isRunning,
         isLoading,
         error,
+        // @ts-expect-error terminalRef is not null
         terminalRef,
         selectFile,
         updateFileContent,
