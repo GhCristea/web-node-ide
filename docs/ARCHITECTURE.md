@@ -11,83 +11,69 @@ This application simulates a full IDE environment in the browser and does **not*
 - **Location**: `src/IDE/IDEStore.tsx` (Provider) and `src/IDE/IDEContext.ts` (Context).
 - **Responsibilities**:
   - Holds view state (selected file id, loading/running flags, errors).
-  - Triggers service actions and refreshes the file tree when needed.
+  - Triggers service actions and receives updated state (e.g., file tree).
   - Renders editor/terminal/file tree via components.
+- **Pattern**: Passive View. Does not manage business logic or infrastructure lifecycle.
 
-### 2. Service Layer (Orchestration)
+### 2. Service Layer (Orchestration & State)
 
 - **Location**: `src/IDE/service/ideService.ts`.
 - **Responsibilities**:
-  - Orchestrates file operations, persistence, runtime sync, and process execution.
-  - Keeps a lightweight in-memory cache of file records for path resolution.
-  - Encapsulates "where does a new file go?" logic (parent resolution).
-  - Agnostic to whether DB is in-thread or worker (duck typing via dependency injection).
+  - **Single Source of Truth**: Maintains the file tree state (`_filesCache`) and WebContainer instance.
+  - **Optimistic Updates**: Updates local state immediately, then syncs to worker/runtime.
+  - **Lifecycle Owner**: Manages WebContainer boot and shutdown.
+  - **Infrastructure Agnostic**: Orchestrates DB and Runtime without leaking details to UI.
 
 ### 3. Worker Layer (DB Operations)
 
 - **Location**: `src/IDE/worker/`.
 - **Components**:
-  - `db.worker.ts`: Runs in worker context, imports `db.ts`, handles messages.
-  - `dbClient.ts`: Main thread proxy with promise-based API matching `db.ts`.
+  - `db.worker.ts`: Runs in worker context, imports `db.impl.ts`, handles messages.
+  - `dbClient.ts`: Main thread proxy with promise-based API matching `db.impl.ts`.
   - `types.ts`: Protocol definitions for `WorkerRequest` / `WorkerResponse`.
 - **Why**: Keeps SQLite WASM operations off the main thread for non-blocking UI.
-- **Details**: See [WORKER.md](./WORKER.md) for implementation specifics.
 
 ### 4. Persistence Layer (File system source of truth)
 
 - **Storage**: SQLite via OPFS (Origin Private File System) when available.
-- **Access**: `src/IDE/db.ts` (now runs inside worker).
-- **Notes**:
-  - File listing fetches metadata; file content is fetched on demand.
-  - Reset is implemented as DB truncate.
+- **Access**: `src/IDE/worker/db.impl.ts` (worker-only).
 
 ### 5. Runtime Layer (WebContainers)
 
 - **Role**: Executes Node.js code in-browser.
-- **Integration**: Managed via `src/IDE/useWebContainer.ts` hook.
-- **Runs On**: Main thread (easier stream handling with xterm).
+- **Managed By**: `ideService.ts` (internal private state).
 - **Syncing**:
-  - Mount: service mounts a snapshot of file paths into the container when ready.
-  - Save: service writes to DB (via worker) and also writes to `WebContainer.fs`.
-  - Run: service spawns `node <path>` and pipes output to the terminal.
+  - Mount: Service mounts files on boot or load.
+  - Save: Service writes to `WebContainer.fs` immediately after DB save.
+  - Run: Service spawns process and pipes output.
 
 ### 6. Terminal
 
 - **Tech**: xterm.js + xterm-addon-fit.
 - **Component**: `src/IDE/TerminalComponent.tsx`.
-- **Connection**: UI passes a small terminal adapter (currently `terminalRef.write`) to the service.
+- **Connection**: UI passes a small terminal adapter to the service via dependencies.
 
-## Data Flow Example (Save File)
+## Data Flow Example (Create File)
 
 ```
-User types in Monaco
+User clicks "New File"
     |
     v
-IDEStore.saveFile() called
+IDEStore.createFile("index.js")
     |
     v
-Service.saveFile(id, content, ...)
+Service.createNode("index.js", ...)
     |
     v
-DBWorkerClient.saveFileContent(id, content)
-    | postMessage({ type: 'SAVE_FILE', ... })
-    v
-DB Worker receives message
+1. Calls DBWorkerClient (Async, Persistence)
+2. Updates local _filesCache (Optimistic)
+3. Writes to WebContainer.fs (Runtime Sync)
     |
     v
-db.saveFileContent(id, content) [SQLite WASM]
+Service returns updated FileTree immediately
     |
     v
-Worker responds: { type: 'SAVE_FILE_SUCCESS' }
-    |
-    v
-DBWorkerClient resolves promise
-    |
-    v
-Service also syncs to WebContainer.fs (if ready)
-    |
-    v
-Terminal writes "Synced <path>"
+IDEStore.setFiles(newTree) -> UI Re-renders
 ```
 
 ## Intentionally Not Supported
