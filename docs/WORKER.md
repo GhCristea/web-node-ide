@@ -1,123 +1,33 @@
-# Worker Architecture
+# Worker Strategy
 
-## Overview
+## Simplified Approach
 
-The database layer runs in a dedicated Web Worker to keep file operations off the main thread. This prevents UI blocking during save/load operations, especially with large file trees or slower OPFS access.
+We use **@sqlite.org/sqlite-wasm** in "Promiser Mode" (`sqlite3Worker1Promiser`).
 
-## Strict Separation Principles
+This library manages its own dedicated Web Worker internally. All database operations called from the main thread (`db.ts`) are automatically serialized, sent to that worker, and executed off the main thread.
 
-### Main Thread
-- **NEVER** imports `worker/db.impl.ts` (SQLite WASM implementation)
-- **ONLY** imports:
-  - `worker/dbClient.ts` (promise-based proxy)
-  - `types/dbTypes.ts` (shared TypeScript types)
+## Why we removed the custom worker layer
 
-### Worker Thread
-- **ONLY** worker code imports `worker/db.impl.ts`
-- Uses shared types from `types/dbTypes.ts`
+We initially built a `src/IDE/worker` layer that wrapped the database operations in *another* worker. This was determined to be:
 
-### Enforcement
-- The file `src/IDE/db.ts` has been **deleted**
-- Implementation moved to `src/IDE/worker/db.impl.ts`
-- Main bundle **cannot** accidentally include SQLite WASM
+1.  **Redundant**: Wrapping a worker-based library in another worker adds overhead.
+2.  **Complex**: Required maintaining a custom message protocol (`INIT_DB`, `GET_FILES`, etc.).
+3.  **Fragile**: Added more points of failure for serialization/deserialization.
 
-## Components
-
-### 1. Shared Types (`src/IDE/types/dbTypes.ts`)
-
-Single source of truth for database record shape:
-```typescript
-export interface FileRecord {
-  id: string;
-  name: string;
-  parentId: string | null;
-  type: 'file' | 'folder';
-  content: string | null;
-  updated_at: string;
-}
-```
-
-### 2. Worker Protocol (`src/IDE/worker/types.ts`)
-
-Strict TypeScript types defining the contract between main thread and worker:
-- `WorkerRequest`: Union of all possible requests (INIT_DB, GET_FILES, SAVE_FILE, etc.)
-- `WorkerResponse`: Union of all possible responses (success variants + ERROR)
-- Every request has a unique `reqId` for async correlation
-
-### 3. DB Implementation (`src/IDE/worker/db.impl.ts`)
-
-**Worker-only implementation**:
-- Imports `@sqlite.org/sqlite-wasm`
-- Imports `FileRecord` from shared types
-- Exports functions matching the DB interface
-- **Not accessible from main thread**
-
-### 4. DB Worker (`src/IDE/worker/db.worker.ts`)
-
-Runs in worker context:
-- Imports `db.impl.ts` (SQLite WASM operations)
-- Listens for `WorkerRequest` messages
-- Executes DB operations
-- Posts `WorkerResponse` back to main thread
-
-### 5. Worker Client (`src/IDE/worker/dbClient.ts`)
-
-Runs in main thread:
-- Provides promise-based API matching `db.impl.ts` signatures
-- Handles request/response correlation via `reqId` tracking
-- Manages pending requests map
-- Abstracts `postMessage` details from consumers
-
-### 6. Integration (`src/IDE/IDEStore.tsx`)
-
-- Creates worker instance: `new Worker(new URL('./worker/db.worker.ts', import.meta.url), { type: 'module' })`
-- Wraps in client: `new DBWorkerClient(worker)`
-- Passes to service as `db` dependency
-- Service layer remains unchanged (duck typing)
-
-## Data Flow
+## Current Architecture
 
 ```
-UI (IDEStore)
-    |
-    v
-Service (ideService)
-    |
-    v
-DBWorkerClient (main thread)
-    | postMessage(WorkerRequest)
-    v
-DB Worker (worker context)
-    |
-    v
-db.impl.ts (SQLite WASM in worker)
-    |
-    v
-OPFS
-    |
-    v (result)
-DB Worker
-    | postMessage(WorkerResponse)
-    v
-DBWorkerClient
-    |
-    v
-Service
-    |
-    v
-UI updates
+[Main Thread]                   [SQLite Internal Worker]
+IDEStore (UI)
+   |
+   v
+ideService
+   |
+   v
+db.ts (Imported Module)  ---->  sqlite3Worker1Promiser
+                                     |
+                                     v
+                                   OPFS (Storage)
 ```
 
-## Benefits
-
-1. **Non-blocking UI**: File saves/loads don't freeze the editor
-2. **Type safety**: Protocol enforces correct message shapes
-3. **Drop-in replacement**: Service layer unchanged (same interface)
-4. **Bundle safety**: Main thread bundle cannot include SQLite WASM accidentally
-5. **Future-proof**: Easy to add more worker operations (e.g., file search, linting)
-
-## Limitations
-
-- WebContainer remains on main thread (streams easier to handle)
-- Worker overhead for tiny operations (~1-2ms per message)
-- Debugging requires worker dev tools
+We adhere to **KISS** and **YAGNI**. We don't build workers until the profiler tells us we need them.
