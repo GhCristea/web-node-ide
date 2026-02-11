@@ -3,7 +3,7 @@ import type { TerminalHandle } from './TerminalComponent';
 import type { FileNode } from './FileTree';
 import { createIDEService } from './service/ideService';
 import { IDEContext } from './IDEContext';
-import { DBWorkerClient } from './worker/dbClient';
+import * as db from './db';
 
 export function IDEProvider({ children }: { children: ReactNode }) {
   const [files, setFiles] = useState<FileNode[]>([]);
@@ -16,33 +16,30 @@ export function IDEProvider({ children }: { children: ReactNode }) {
 
   const terminalRef = useRef<TerminalHandle>(null);
 
-  const dbClient = useMemo(() => {
-    const worker = new Worker(new URL('./worker/db.worker.ts', import.meta.url), { type: 'module' });
-    return new DBWorkerClient(worker);
-  }, []);
-
+  // 1. Create Service (Direct DB Dependency)
   const service = useMemo(
     () =>
       createIDEService({
-        db: dbClient,
+        db, // Injected directly, no worker wrapper needed
         terminal: { write: (data: string) => terminalRef.current?.write(data) },
         onReady: () => setIsReady(true)
       }),
-    [dbClient]
+    []
   );
 
+  // 2. Init
   useEffect(() => {
     setIsLoading(true);
-    service
-      .initialize()
+    service.initialize()
       .then(() => service.loadFiles())
-      .then(tree => {
+      .then((tree) => {
         setFiles(tree);
       })
-      .catch(err => setError(`Init Failed: ${err}`))
+      .catch((err) => setError(`Init Failed: ${err}`))
       .finally(() => setIsLoading(false));
   }, [service]);
 
+  // 3. File Selection
   useEffect(() => {
     if (!selectedFileId) {
       setFileContent('');
@@ -50,6 +47,8 @@ export function IDEProvider({ children }: { children: ReactNode }) {
     }
     service.getFileContent(selectedFileId).then(setFileContent);
   }, [service, selectedFileId]);
+
+  // --- Actions ---
 
   const selectFile = (id: string | null) => setSelectedFileId(id);
   const updateFileContent = (content: string) => setFileContent(content);
@@ -63,10 +62,14 @@ export function IDEProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const createFile = async (name: string, type: 'file' | 'folder', explicitParentId?: string | null) => {
+  const createFile = async (
+    name: string,
+    type: 'file' | 'folder',
+    explicitParentId?: string | null
+  ) => {
     try {
       const newTree = await service.createNode(name, type, selectedFileId, explicitParentId);
-      setFiles(newTree); // Immediate update from service state
+      setFiles(newTree);
     } catch {
       setError(`Failed to create ${type}`);
     }
