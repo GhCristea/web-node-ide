@@ -1,16 +1,13 @@
 import { WebContainer } from '@webcontainer/api';
-import { buildTree, generateFilePaths } from '../fileUtils';
+import { buildTree, buildWebContainerTree, generateFilePaths } from './fileUtils';
 import type { IDEService, IDEDependencies, FileNode } from './types';
 import type { FileRecord } from '../types/dbTypes';
 
 export function createIDEService(deps: IDEDependencies): IDEService {
-  // Internal State
   let _filesCache: FileRecord[] = [];
   let _treeCache: FileNode[] = [];
   let _webContainer: WebContainer | null = null;
   let _isWcReady = false;
-
-  // --- Helpers ---
 
   const updateTree = () => {
     _treeCache = buildTree(_filesCache);
@@ -62,22 +59,17 @@ export function createIDEService(deps: IDEDependencies): IDEService {
   const mountAll = async () => {
     if (!_webContainer) return;
     const paths = generateFilePaths(_filesCache);
-    await _webContainer.mount(paths);
+    await _webContainer.mount(buildWebContainerTree(paths));
   };
-
-  // --- Service Implementation ---
 
   return {
     async initialize() {
-      // 1. Init DB
       await deps.db.initDb();
-
-      // 2. Boot WebContainer (Async, doesn't block UI init)
       WebContainer.boot()
-        .then(async (wc) => {
+        .then(async wc => {
           _webContainer = wc;
           _isWcReady = true;
-          await mountAll(); // Mount whatever files we have loaded
+          await mountAll();
           deps.terminal.write('\x1b[32m✓ Node.js Runtime Ready\x1b[0m\r\n');
           if (deps.onReady) deps.onReady();
         })
@@ -92,14 +84,10 @@ export function createIDEService(deps: IDEDependencies): IDEService {
     },
 
     async loadFiles() {
-      // Fetch from DB
       const allFiles = await deps.db.getFilesFromDb();
       _filesCache = allFiles;
-      
-      // Update Tree
       const tree = updateTree();
 
-      // If WC is already ready, make sure it has latest files
       if (_isWcReady) {
         await mountAll();
       }
@@ -112,17 +100,13 @@ export function createIDEService(deps: IDEDependencies): IDEService {
     },
 
     async saveFile(id: string, content: string) {
-      // 1. Update DB (Worker)
       await deps.db.saveFileContent(id, content);
-
-      // 2. Optimistic Update (Local Cache)
       const cachedFile = _filesCache.find(f => f.id === id);
+
       if (cachedFile) {
         cachedFile.content = content;
-        // Note: content change doesn't affect tree structure, so no updateTree() needed
       }
 
-      // 3. Sync to Runtime
       await syncToWebContainer(id, content);
     },
 
@@ -133,11 +117,8 @@ export function createIDEService(deps: IDEDependencies): IDEService {
       explicitParentId?: string | null
     ) {
       const parentId = resolveParentId(selectedFileId, explicitParentId);
-      
-      // 1. DB Op
       const id = await deps.db.createFile(name, parentId, type, type === 'file' ? '' : '');
 
-      // 2. Optimistic Cache Update
       const newFile: FileRecord = {
         id,
         name,
@@ -148,41 +129,33 @@ export function createIDEService(deps: IDEDependencies): IDEService {
       };
       _filesCache.push(newFile);
 
-      // 3. Sync to Runtime (if file)
       if (type === 'file') {
         await syncToWebContainer(id, '');
       } else {
-         if (_isWcReady && _webContainer) {
-            const path = getPathFromCache(id);
-            if (path) await _webContainer.fs.mkdir(path, { recursive: true });
-         }
+        if (_isWcReady && _webContainer) {
+          const path = getPathFromCache(id);
+          if (path) await _webContainer.fs.mkdir(path, { recursive: true });
+        }
       }
 
       return updateTree();
     },
 
     async deleteNode(id: string) {
-      // 1. DB Op
       await deps.db.deleteFile(id);
-
-      // 2. Optimistic Cache Update (Recursive removal)
       const toRemove = new Set<string>();
       const collect = (nodeId: string) => {
         toRemove.add(nodeId);
         _filesCache.filter(f => f.parentId === nodeId).forEach(child => collect(child.id));
       };
       collect(id);
-
       _filesCache = _filesCache.filter(f => !toRemove.has(f.id));
 
       return updateTree();
     },
 
     async renameNode(id: string, newName: string) {
-      // 1. DB Op
       await deps.db.renameFile(id, newName);
-
-      // 2. Optimistic Cache Update
       const file = _filesCache.find(f => f.id === id);
       if (file) {
         file.name = newName;
@@ -192,10 +165,7 @@ export function createIDEService(deps: IDEDependencies): IDEService {
     },
 
     async moveNode(id: string, newParentId: string | null) {
-      // 1. DB Op
       await deps.db.moveFile(id, newParentId);
-
-      // 2. Optimistic Cache Update
       const file = _filesCache.find(f => f.id === id);
       if (file) {
         file.parentId = newParentId;

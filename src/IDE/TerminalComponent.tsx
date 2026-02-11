@@ -32,7 +32,6 @@ export const TerminalComponent = forwardRef<TerminalHandle>((_, ref) => {
     xterm.current.loadAddon(fitAddon.current);
     xterm.current.open(terminalRef.current);
 
-    // Initial fit
     setTimeout(() => {
       fitAddon.current?.fit();
     }, 0);
@@ -54,13 +53,7 @@ export const TerminalComponent = forwardRef<TerminalHandle>((_, ref) => {
   return (
     <div
       ref={terminalRef}
-      style={{
-        height: '100%',
-        width: '100%',
-        backgroundColor: '#1e1e1e',
-        padding: 1,
-        overflow: 'hidden' // Ensure no scrollbars interfere
-      }}
+      style={{ height: '100%', width: '100%', backgroundColor: '#1e1e1e', padding: 1, overflow: 'hidden' }}
     />
   );
 });

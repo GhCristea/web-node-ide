@@ -52,7 +52,7 @@ self.onmessage = async (e: MessageEvent<WorkerRequest>) => {
         break;
       }
       default:
-        console.warn('Unknown worker request type:', (e.data as any).type);
+        console.warn('Unknown worker request type:', (e.data as { type: string }).type);
     }
   } catch (error) {
     postResponse({ type: 'ERROR', reqId, error: String(error) });

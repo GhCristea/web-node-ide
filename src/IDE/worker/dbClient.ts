@@ -7,6 +7,7 @@ import type { WorkerRequest, WorkerResponse } from './types';
  */
 export class DBWorkerClient {
   private worker: Worker;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   private pendingRequests = new Map<string, { resolve: (value: any) => void; reject: (error: Error) => void }>();
   private reqCounter = 0;
 
@@ -58,7 +59,9 @@ export class DBWorkerClient {
     }
   }
 
-  private sendRequest<T>(request: Omit<WorkerRequest, 'reqId'>): Promise<T> {
+  private sendRequest<T extends WorkerRequest['type']>(
+    request: Omit<Extract<WorkerRequest, { type: T }>, 'reqId'>
+  ): Promise<Extract<WorkerResponse, { type: T }>> {
     const reqId = `req_${++this.reqCounter}`;
     return new Promise((resolve, reject) => {
       this.pendingRequests.set(reqId, { resolve, reject });
@@ -75,11 +78,11 @@ export class DBWorkerClient {
   }
 
   getFileContent(fileId: string): Promise<string> {
-    return this.sendRequest({ type: 'GET_FILE_CONTENT', fileId });
+    return this.sendRequest<'GET_FILE_CONTENT'>({ type: 'GET_FILE_CONTENT', fileId });
   }
 
   saveFileContent(fileId: string, content: string): Promise<void> {
-    return this.sendRequest({ type: 'SAVE_FILE', fileId, content });
+    return this.sendRequest<'SAVE_FILE'>({ type: 'SAVE_FILE', fileId, content });
   }
 
   createFile(
@@ -88,19 +91,19 @@ export class DBWorkerClient {
     nodeType: 'file' | 'folder',
     content: string = ''
   ): Promise<string> {
-    return this.sendRequest({ type: 'CREATE_FILE', name, parentId, nodeType, content });
+    return this.sendRequest<'CREATE_FILE'>({ type: 'CREATE_FILE', name, parentId, nodeType, content });
   }
 
   deleteFile(fileId: string): Promise<void> {
-    return this.sendRequest({ type: 'DELETE_FILE', fileId });
+    return this.sendRequest<'DELETE_FILE'>({ type: 'DELETE_FILE', fileId });
   }
 
   renameFile(fileId: string, newName: string): Promise<void> {
-    return this.sendRequest({ type: 'RENAME_FILE', fileId, newName });
+    return this.sendRequest<'RENAME_FILE'>({ type: 'RENAME_FILE', fileId, newName });
   }
 
   moveFile(fileId: string, newParentId: string | null): Promise<void> {
-    return this.sendRequest({ type: 'MOVE_FILE', fileId, newParentId });
+    return this.sendRequest<'MOVE_FILE'>({ type: 'MOVE_FILE', fileId, newParentId });
   }
 
   resetFileSystem(): Promise<void> {

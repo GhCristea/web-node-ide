@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, type ReactNode, useRef, useMemo } from 'react';
+import { useEffect, useState, type ReactNode, useRef, useMemo } from 'react';
 import type { TerminalHandle } from './TerminalComponent';
 import type { FileNode } from './FileTree';
 import { createIDEService } from './service/ideService';
@@ -16,16 +16,11 @@ export function IDEProvider({ children }: { children: ReactNode }) {
 
   const terminalRef = useRef<TerminalHandle>(null);
 
-  // 1. Create Worker Client
   const dbClient = useMemo(() => {
-    const worker = new Worker(
-      new URL('./worker/db.worker.ts', import.meta.url),
-      { type: 'module' }
-    );
+    const worker = new Worker(new URL('./worker/db.worker.ts', import.meta.url), { type: 'module' });
     return new DBWorkerClient(worker);
   }, []);
 
-  // 2. Create Service
   const service = useMemo(
     () =>
       createIDEService({
@@ -36,19 +31,18 @@ export function IDEProvider({ children }: { children: ReactNode }) {
     [dbClient]
   );
 
-  // 3. Init
   useEffect(() => {
     setIsLoading(true);
-    service.initialize()
+    service
+      .initialize()
       .then(() => service.loadFiles())
-      .then((tree) => {
+      .then(tree => {
         setFiles(tree);
       })
-      .catch((err) => setError(`Init Failed: ${err}`))
+      .catch(err => setError(`Init Failed: ${err}`))
       .finally(() => setIsLoading(false));
   }, [service]);
 
-  // 4. File Selection
   useEffect(() => {
     if (!selectedFileId) {
       setFileContent('');
@@ -56,8 +50,6 @@ export function IDEProvider({ children }: { children: ReactNode }) {
     }
     service.getFileContent(selectedFileId).then(setFileContent);
   }, [service, selectedFileId]);
-
-  // --- Actions (Simplified: Delegate to service, receive updated tree) ---
 
   const selectFile = (id: string | null) => setSelectedFileId(id);
   const updateFileContent = (content: string) => setFileContent(content);
@@ -71,11 +63,7 @@ export function IDEProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const createFile = async (
-    name: string,
-    type: 'file' | 'folder',
-    explicitParentId?: string | null
-  ) => {
+  const createFile = async (name: string, type: 'file' | 'folder', explicitParentId?: string | null) => {
     try {
       const newTree = await service.createNode(name, type, selectedFileId, explicitParentId);
       setFiles(newTree); // Immediate update from service state

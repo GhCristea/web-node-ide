@@ -1,5 +1,6 @@
 import type { FileRecord } from './types';
 import type { FileNode } from '../FileTree';
+import { type FileSystemTree } from '@webcontainer/api';
 
 export function buildTree(files: FileRecord[]): FileNode[] {
   const nodeMap = new Map<string, FileNode>();
@@ -55,4 +56,35 @@ export function generateFilePaths(files: FileRecord[]): Record<string, string> {
   });
 
   return paths;
+}
+
+const isDir = (file: FileSystemTree[string]) => 'directory' in file;
+
+export function buildWebContainerTree(filesMap: Record<string, string>): FileSystemTree {
+  const tree: FileSystemTree = {};
+  Object.entries(filesMap).forEach(([filePath, content]) => {
+    const pathParts = filePath.split('/');
+    let subtree = tree;
+
+    for (let index = 0; index < pathParts.length; index++) {
+      const pathPart = pathParts[index];
+      if (!pathPart) continue;
+
+      let node = subtree[pathPart];
+
+      if (!node) {
+        if (index !== pathParts.length - 1) {
+          subtree[pathPart] = { directory: {} };
+        } else {
+          subtree[pathPart] = { file: { contents: content } };
+        }
+        node = subtree[pathPart];
+      }
+
+      if (node && isDir(node)) {
+        subtree = node.directory;
+      }
+    }
+  });
+  return tree;
 }
