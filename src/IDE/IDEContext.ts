@@ -14,7 +14,11 @@ interface IDEContextType {
   selectFile: (id: string | null) => void;
   updateFileContent: (content: string) => void;
   saveFile: () => Promise<void>;
-  createFile: (name: string, type: 'file' | 'folder') => Promise<void>;
+  createFile: (
+    name: string,
+    type: 'file' | 'folder',
+    parentId?: string | null
+  ) => Promise<void>;
   renameNode: (id: string, newName: string) => Promise<void>;
   deleteNode: (id: string) => Promise<void>;
   run: () => Promise<void>;
