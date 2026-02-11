@@ -20,6 +20,7 @@ interface IDEContextType {
     parentId?: string | null
   ) => Promise<void>;
   renameNode: (id: string, newName: string) => Promise<void>;
+  moveNode: (id: string, newParentId: string | null) => Promise<void>;
   deleteNode: (id: string) => Promise<void>;
   run: () => Promise<void>;
   reset: () => Promise<void>;
