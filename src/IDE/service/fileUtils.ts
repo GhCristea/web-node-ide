@@ -1,4 +1,4 @@
-import type { FileRecord } from '../db';
+import type { FileRecord } from './types';
 import type { FileNode } from '../FileTree';
 
 export function buildTree(files: FileRecord[]): FileNode[] {

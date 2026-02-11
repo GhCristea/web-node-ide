@@ -1,5 +1,5 @@
 import type { WebContainer } from '@webcontainer/api';
-import { buildTree, generateFilePaths } from '../fileUtils';
+import { buildTree, generateFilePaths } from './fileUtils';
 import type { IDEService, IDEDependencies } from './types';
 import type { FileRecord } from '../types/dbTypes';
 
