@@ -1,7 +1,6 @@
 import { useEffect, useState, useCallback, type ReactNode, useRef, useMemo } from 'react';
 import type { TerminalHandle } from './TerminalComponent';
 import type { FileNode } from './FileTree';
-import { useWebContainer } from './useWebContainer';
 import { createIDEService } from './service/ideService';
 import { IDEContext } from './IDEContext';
 import { DBWorkerClient } from './worker/dbClient';
@@ -10,15 +9,14 @@ export function IDEProvider({ children }: { children: ReactNode }) {
   const [files, setFiles] = useState<FileNode[]>([]);
   const [selectedFileId, setSelectedFileId] = useState<string | null>(null);
   const [fileContent, setFileContent] = useState('');
-  const [isDbReady, setIsDbReady] = useState(false);
+  const [isReady, setIsReady] = useState(false);
   const [isRunning, setIsRunning] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const terminalRef = useRef<TerminalHandle>(null);
-  const { isReady: isWcReady, mount, writeFile, webContainer } = useWebContainer();
 
-  // Create persistent worker client
+  // 1. Create Worker Client
   const dbClient = useMemo(() => {
     const worker = new Worker(
       new URL('./worker/db.worker.ts', import.meta.url),
@@ -27,45 +25,30 @@ export function IDEProvider({ children }: { children: ReactNode }) {
     return new DBWorkerClient(worker);
   }, []);
 
+  // 2. Create Service
   const service = useMemo(
     () =>
       createIDEService({
         db: dbClient,
-        terminal: { write: (data: string) => terminalRef.current?.write(data) }
+        terminal: { write: (data: string) => terminalRef.current?.write(data) },
+        onReady: () => setIsReady(true)
       }),
     [dbClient]
   );
 
-  const fetchFiles = useCallback(async () => {
-    try {
-      setIsLoading(true);
-      const tree = await service.loadFiles(isWcReady, mount);
-      setFiles(tree);
-    } catch (err) {
-      setError(String(err));
-    } finally {
-      setIsLoading(false);
-    }
-  }, [service, isWcReady, mount]);
-
-  // Initialization Effect
+  // 3. Init
   useEffect(() => {
-    service.initialize() // This calls db.initDb() internally via service
-      .then(async () => {
-        setIsDbReady(true);
-        await fetchFiles();
+    setIsLoading(true);
+    service.initialize()
+      .then(() => service.loadFiles())
+      .then((tree) => {
+        setFiles(tree);
       })
-      .catch((err: unknown) => setError(`DB Init Failed: ${err}`));
-  }, [service, fetchFiles]);
+      .catch((err) => setError(`Init Failed: ${err}`))
+      .finally(() => setIsLoading(false));
+  }, [service]);
 
-  useEffect(() => {
-    if (isWcReady && isDbReady) {
-      fetchFiles().then(() => {
-        terminalRef.current?.write('\x1b[32m✓ Node.js Environment Ready\x1b[0m\r\n');
-      });
-    }
-  }, [isWcReady, isDbReady, fetchFiles]);
-
+  // 4. File Selection
   useEffect(() => {
     if (!selectedFileId) {
       setFileContent('');
@@ -74,14 +57,16 @@ export function IDEProvider({ children }: { children: ReactNode }) {
     service.getFileContent(selectedFileId).then(setFileContent);
   }, [service, selectedFileId]);
 
+  // --- Actions (Simplified: Delegate to service, receive updated tree) ---
+
   const selectFile = (id: string | null) => setSelectedFileId(id);
   const updateFileContent = (content: string) => setFileContent(content);
 
   const saveFile = async () => {
     if (!selectedFileId) return;
     try {
-      await service.saveFile(selectedFileId, fileContent, isWcReady, writeFile);
-    } catch (err) {
+      await service.saveFile(selectedFileId, fileContent);
+    } catch {
       setError('Failed to save file');
     }
   };
@@ -92,8 +77,8 @@ export function IDEProvider({ children }: { children: ReactNode }) {
     explicitParentId?: string | null
   ) => {
     try {
-      await service.createNode(name, type, selectedFileId, explicitParentId);
-      await fetchFiles();
+      const newTree = await service.createNode(name, type, selectedFileId, explicitParentId);
+      setFiles(newTree); // Immediate update from service state
     } catch {
       setError(`Failed to create ${type}`);
     }
@@ -101,8 +86,8 @@ export function IDEProvider({ children }: { children: ReactNode }) {
 
   const renameNode = async (id: string, newName: string) => {
     try {
-      await service.renameNode(id, newName);
-      await fetchFiles();
+      const newTree = await service.renameNode(id, newName);
+      setFiles(newTree);
     } catch {
       setError('Failed to rename');
     }
@@ -110,8 +95,8 @@ export function IDEProvider({ children }: { children: ReactNode }) {
 
   const moveNode = async (id: string, newParentId: string | null) => {
     try {
-      await service.moveNode(id, newParentId);
-      await fetchFiles();
+      const newTree = await service.moveNode(id, newParentId);
+      setFiles(newTree);
     } catch {
       setError('Failed to move');
     }
@@ -119,19 +104,19 @@ export function IDEProvider({ children }: { children: ReactNode }) {
 
   const deleteNode = async (id: string) => {
     try {
-      await service.deleteNode(id);
+      const newTree = await service.deleteNode(id);
+      setFiles(newTree);
       if (selectedFileId === id) selectFile(null);
-      await fetchFiles();
     } catch {
       setError('Failed to delete');
     }
   };
 
   const run = async () => {
-    if (!selectedFileId || !isWcReady || !webContainer) return;
+    if (!selectedFileId) return;
     setIsRunning(true);
     try {
-      await service.runFile(selectedFileId, isWcReady, webContainer);
+      await service.runFile(selectedFileId);
     } finally {
       setIsRunning(false);
     }
@@ -147,7 +132,7 @@ export function IDEProvider({ children }: { children: ReactNode }) {
         files,
         selectedFileId,
         fileContent,
-        isReady: isWcReady && isDbReady,
+        isReady,
         isRunning,
         isLoading,
         error,
