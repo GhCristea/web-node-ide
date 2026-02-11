@@ -10,6 +10,7 @@ import {
   createFile as dbCreateFile,
   saveFileContent as dbSaveFileContent,
   renameFile as dbRenameFile,
+  moveFile as dbMoveFile,
   deleteFile as dbDeleteFile,
   initDb,
   resetFileSystem as dbResetFileSystem,
@@ -179,6 +180,16 @@ export function IDEProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const moveNode = async (id: string, newParentId: string | null) => {
+    try {
+      await dbMoveFile(id, newParentId);
+      await fetchFiles();
+    } catch (err) {
+      console.error(err);
+      setError('Failed to move');
+    }
+  };
+
   const deleteNode = async (id: string) => {
     try {
       await dbDeleteFile(id);
@@ -246,6 +257,7 @@ export function IDEProvider({ children }: { children: ReactNode }) {
         saveFile,
         createFile,
         renameNode,
+        moveNode,
         deleteNode,
         run,
         reset
