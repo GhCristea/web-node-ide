@@ -1,8 +1,8 @@
-import { createContext, type RefObject } from 'react';
-import type { TerminalHandle } from './TerminalComponent';
+import { createContext } from 'react';
 import type { FileNode } from './FileTree';
+import type { TerminalHandle } from './TerminalComponent';
 
-export interface IDEContextType {
+interface IDEContextType {
   files: FileNode[];
   selectedFileId: string | null;
   fileContent: string;
@@ -10,11 +10,18 @@ export interface IDEContextType {
   isRunning: boolean;
   isLoading: boolean;
   error: string | null;
-  terminalRef: RefObject<TerminalHandle | null>;
+  terminalRef: React.RefObject<TerminalHandle> | null;
   selectFile: (id: string | null) => void;
   updateFileContent: (content: string) => void;
   saveFile: () => Promise<void>;
-  createFile: (name: string, type: 'file' | 'folder') => Promise<void>;
+  createFile: (
+    name: string,
+    type: 'file' | 'folder',
+    parentId?: string | null
+  ) => Promise<void>;
+  renameNode: (id: string, newName: string) => Promise<void>;
+  moveNode: (id: string, newParentId: string | null) => Promise<void>;
+  deleteNode: (id: string) => Promise<void>;
   run: () => Promise<void>;
   reset: () => Promise<void>;
 }

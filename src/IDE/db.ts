@@ -128,6 +128,61 @@ export async function createFile(
   }
 }
 
+export async function renameFile(id: string, newName: string) {
+  const promiser = await initDb();
+  try {
+    await promiser('exec', {
+      sql: 'UPDATE files SET name = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+      bind: [newName, id],
+      dbId
+    });
+    console.log(`Renamed file ${id} to ${newName}`);
+  } catch (error) {
+    console.error('Failed to rename file:', error);
+    throw error;
+  }
+}
+
+export async function moveFile(id: string, newParentId: string | null) {
+  const promiser = await initDb();
+  try {
+    await promiser('exec', {
+      sql: 'UPDATE files SET parentId = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+      bind: [newParentId, id],
+      dbId
+    });
+    console.log(`Moved file ${id} to parent ${newParentId}`);
+  } catch (error) {
+    console.error('Failed to move file:', error);
+    throw error;
+  }
+}
+
+export async function deleteFile(id: string) {
+  const promiser = await initDb();
+  try {
+    // Recursive delete using CTE
+    await promiser('exec', {
+      sql: `
+        WITH RECURSIVE
+          descendants(id) AS (
+            SELECT id FROM files WHERE id = ?
+            UNION ALL
+            SELECT f.id FROM files f
+            JOIN descendants d ON f.parentId = d.id
+          )
+        DELETE FROM files WHERE id IN descendants;
+      `,
+      bind: [id],
+      dbId
+    });
+    console.log(`Deleted file/folder ${id} and its descendants`);
+  } catch (error) {
+    console.error('Failed to delete file:', error);
+    throw error;
+  }
+}
+
 export async function getFileContent(id: string): Promise<string> {
   const promiser = await initDb();
   const result = await promiser('exec', {

@@ -9,6 +9,9 @@ import {
   getFilesFromDb,
   createFile as dbCreateFile,
   saveFileContent as dbSaveFileContent,
+  renameFile as dbRenameFile,
+  moveFile as dbMoveFile,
+  deleteFile as dbDeleteFile,
   initDb,
   resetFileSystem as dbResetFileSystem,
   generateFilePaths,
@@ -140,10 +143,17 @@ export function IDEProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const createFile = async (name: string, type: 'file' | 'folder') => {
+  const createFile = async (
+    name: string,
+    type: 'file' | 'folder',
+    explicitParentId?: string | null
+  ) => {
     try {
       let parentId: string | null = null;
-      if (selectedFileId) {
+
+      if (explicitParentId !== undefined) {
+        parentId = explicitParentId;
+      } else if (selectedFileId) {
         const selectedNode = findFileNodeById(files, selectedFileId);
         if (selectedNode) {
           parentId =
@@ -157,6 +167,39 @@ export function IDEProvider({ children }: { children: ReactNode }) {
       await fetchFiles();
     } catch {
       setError(`Failed to create ${type}`);
+    }
+  };
+
+  const renameNode = async (id: string, newName: string) => {
+    try {
+      await dbRenameFile(id, newName);
+      await fetchFiles();
+    } catch (err) {
+      console.error(err);
+      setError('Failed to rename');
+    }
+  };
+
+  const moveNode = async (id: string, newParentId: string | null) => {
+    try {
+      await dbMoveFile(id, newParentId);
+      await fetchFiles();
+    } catch (err) {
+      console.error(err);
+      setError('Failed to move');
+    }
+  };
+
+  const deleteNode = async (id: string) => {
+    try {
+      await dbDeleteFile(id);
+      if (selectedFileId === id) {
+        selectFile(null);
+      }
+      await fetchFiles();
+    } catch (err) {
+      console.error(err);
+      setError('Failed to delete');
     }
   };
 
@@ -208,11 +251,15 @@ export function IDEProvider({ children }: { children: ReactNode }) {
         isRunning,
         isLoading,
         error,
+        // @ts-expect-error terminalRef is not null
         terminalRef,
         selectFile,
         updateFileContent,
         saveFile,
         createFile,
+        renameNode,
+        moveNode,
+        deleteNode,
         run,
         reset
       }}
