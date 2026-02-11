@@ -9,7 +9,7 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
-    "copy-assets": "cp node_modules/@sqlite.org/sqlite-wasm/dist/sqlite3.wasm public/ && cp node_modules/@sqlite.org/sqlite-wasm/dist/sqlite3-opfs-async-proxy.js public/",
+    "copy-assets": "mkdir -p public/assets && cp node_modules/@sqlite.org/sqlite-wasm/dist/sqlite3.wasm public/assets/ && cp node_modules/@sqlite.org/sqlite-wasm/dist/sqlite3-opfs-async-proxy.js public/assets/",
     "prebuild": "npm run copy-assets"
   },
   "dependencies": {
