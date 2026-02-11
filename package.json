@@ -8,7 +8,9 @@
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "copy-assets": "cp node_modules/@sqlite.org/sqlite-wasm/dist/sqlite3.wasm public/ && cp node_modules/@sqlite.org/sqlite-wasm/dist/sqlite3-opfs-async-proxy.js public/",
+    "prebuild": "npm run copy-assets"
   },
   "dependencies": {
     "@monaco-editor/react": "^4.7.0",
