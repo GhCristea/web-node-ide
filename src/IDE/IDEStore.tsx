@@ -48,16 +48,15 @@ export function IDEProvider({ children }: { children: ReactNode }) {
     }
   }, [service, isWcReady, mount]);
 
+  // Initialization Effect
   useEffect(() => {
-    dbClient
-      .initDb()
+    service.initialize() // This calls db.initDb() internally via service
       .then(async () => {
         setIsDbReady(true);
-        await service.initialize();
         await fetchFiles();
       })
       .catch((err: unknown) => setError(`DB Init Failed: ${err}`));
-  }, [dbClient, service, fetchFiles]);
+  }, [service, fetchFiles]);
 
   useEffect(() => {
     if (isWcReady && isDbReady) {
