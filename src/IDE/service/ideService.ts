@@ -1,6 +1,7 @@
 import type { WebContainer } from '@webcontainer/api';
-import { buildTree, generateFilePaths } from './fileUtils';
-import type { IDEService, IDEDependencies, FileRecord } from './types';
+import { buildTree, generateFilePaths } from '../fileUtils';
+import type { IDEService, IDEDependencies } from './types';
+import type { FileRecord } from '../types/dbTypes';
 
 export function createIDEService(deps: IDEDependencies): IDEService {
   let _filesCache: FileRecord[] = [];
@@ -126,7 +127,7 @@ export function createIDEService(deps: IDEDependencies): IDEService {
           })
         );
         const exitCode = await process.exit;
-        deps.terminal.write(`\r\n\x1b[1;33mProcess exited with code ${exitCode}\x1b[0m\r\n`);
+        deps.terminal.write(`\r\\n\\x1b[1;33mProcess exited with code ${exitCode}\\x1b[0m\\r\\n`);
       } catch (err) {
         deps.terminal.write(`\x1b[1;31mError: ${err}\x1b[0m\r\n`);
       }
