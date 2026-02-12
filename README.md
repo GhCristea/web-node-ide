@@ -1,57 +1,240 @@
-# Web Node IDE
+# web-node-ide
 
-A browser-based Node.js IDE that allows you to write, run, and execute Node.js code directly in your browser.
+A lightweight, web-based IDE for Node.js script development. Built with vanilla TypeScript, XState for state management, and WebContainers-compatible file system.
 
-## Key Features
+**Zero React. Pure composition.**
 
-- **In-Browser Runtime**: Powered by **WebContainers**, enabling native `npm install` and node execution.
-- **Persistent Storage**: **SQLite WASM + OPFS** ensures your files are saved reliably between sessions.
-- **Service-Based Architecture**: Separation of concerns between UI, filesystem, and runtime logic.
-- **Monaco Editor**: VS Code's editor engine with syntax highlighting and IntelliSense.
-- **Xterm.js Terminal**: Fully integrated terminal for command output and interaction.
+## ✨ Features
 
-## Architecture
+- 📁 **Virtual File System** - IndexedDB-backed, WebContainers compatible
+- ⚡ **Code Execution** - Web Worker isolation, real-time output capture
+- 🎨 **Vanilla UI** - No framework, pure DOM and CSS
+- 🔧 **Service-Oriented** - Modular, testable architecture
+- 🎯 **State Machine** - XState for predictable state management
+- 📝 **Multi-pane Layout** - Sidebar (files) + Editor + Output
 
-This project uses a **Service Layer Pattern** to decouple business logic from the React UI:
+## 🚀 Quick Start
 
-- **UI Layer (`IDEStore`)**: Manages view state (selected file, loading flags) and connects components to the service.
-- **Service Layer (`ideService`)**: Orchestrates file operations, database sync, and WebContainer execution.
-- **Infrastructure (`db`, `webContainer`)**: Handles low-level persistence and runtime environments.
+### Install
 
-## Technologies
+```bash
+git clone https://github.com/GhCristea/web-node-ide.git
+cd web-node-ide
+npm install
+```
 
-- **Core**: React 19, TypeScript, Vite
-- **Runtime**: @webcontainer/api
-- **Storage**: @sqlite.org/sqlite-wasm (OPFS)
-- **Editor**: @monaco-editor/react
-- **Terminal**: @xterm/xterm
+### Develop
 
-## Setup & Running
+```bash
+npm run dev
+```
 
-1. **Clone & Install**
-   ```bash
-   git clone https://github.com/GhCristea/web-node-ide
-   cd web-node-ide
-   npm install
-   ```
+Open http://localhost:5173 in your browser.
 
-2. **Run Development Server**
-   ```bash
-   npm run dev
-   ```
-   *Note: Must be served over HTTPS or localhost due to `SharedArrayBuffer` security requirements.*
+### Build
 
-## Usage
+```bash
+npm run build
+```
 
-- **File Management**: Create files/folders via the explorer. Logic handles parent resolution automatically.
-- **Execution**: Click "Run" to execute the active file. Output streams directly to the integrated terminal.
-- **Persistence**: Files are auto-saved to OPFS. Use "Reset FS" to clear the database if needed.
+## 📚 Documentation
 
-## Requirements
+- **[ARCHITECTURE.md](./ARCHITECTURE.md)** - System design overview
+- **[SERVICES.md](./docs/SERVICES.md)** - Service architecture and API
+- **[FILESYSTEM.md](./docs/FILESYSTEM.md)** - FileSystemService guide
 
-- A Chromium-based browser (Chrome, Edge) for full WebContainer support.
-- Cross-Origin Isolation headers (COOP/COEP) are required (handled by Vite config).
+## 🏗️ Architecture
 
-## License
+### Three Layers
+
+```
+UI Components (Vanilla JS)
+        ↓
+State Machine (XState)
+        ↓
+Services (Dependency Injection)
+```
+
+**UI Components** (no framework):
+- `EditorComponent` - Code editor with execution controls
+- `FileTreeComponent` - Virtual file system tree view
+- `OutputPanelComponent` - Execution results display
+
+**State Machine** (XState):
+- Manages editor state: idle → loading → editing → saving → executing
+- Immutable context: file path, content, logs, errors
+- Explicit transitions prevent invalid states
+
+**Services** (Dependency Injection):
+- `FileSystemService` - Virtual FS (IndexedDB)
+- `ExecutorService` - Code execution (Web Worker)
+- `LoggerService` - Structured logging
+- `NotificationService` - Toast notifications
+
+## 📂 Project Structure
+
+```
+src/
+├── core/
+│   ├── machines/
+│   │   ├── editor.ts           # State machine definition
+│   │   └── index.ts            # Machine creation
+│   ├── services/
+│   │   ├── filesystem.ts       # Virtual file system
+│   │   ├── executor.ts         # Code execution
+│   │   ├── logger.ts           # Structured logging
+│   │   ├── notification.ts     # Toast notifications
+│   │   ├── registry.ts         # DI container
+│   │   └── index.ts            # Service exports
+│   └── types.ts                # Shared TypeScript types
+├── ui/
+│   ├── editor.ts               # Editor component
+│   ├── file-tree.ts            # File tree component
+│   ├── output-panel.ts         # Output display component
+│   └── index.ts                # Component exports
+├── main.ts                      # App entry point
+├── style.css                    # Global styles
+└── index.html                   # HTML shell
+```
+
+## 🎯 Usage
+
+### Open and Edit a File
+
+1. Click a file in the sidebar
+2. File content loads into editor
+3. Edit code
+4. Click **Save** to persist (or Ctrl+S)
+
+### Execute Code
+
+1. Click **Run** button
+2. Code executes in Web Worker
+3. Output appears in bottom panel
+4. Execution errors shown as toast notification
+
+### Create/Delete Files
+
+```typescript
+const fs = registry.get('filesystem')
+
+// Create file
+await fs.writeFile('/new-file.js', 'console.log("hello")')
+
+// Delete file
+await fs.rm('/new-file.js')
+```
+
+## 🔌 Extending
+
+### Add a New Service
+
+```typescript
+// 1. Create service
+export class MyService {
+  doSomething() { }
+}
+
+// 2. Register in src/core/services/registry.ts
+const myService = new MyService()
+registry.register('myservice', myService)
+
+// 3. Use in components
+const myService = registry.get('myservice')
+```
+
+### Add a New Component
+
+```typescript
+// 1. Create component
+export class MyComponent {
+  constructor(container: HTMLElement) {
+    this.render()
+  }
+  private render() { }
+}
+
+// 2. Mount in main.ts
+const component = new MyComponent(container)
+
+// 3. Wire events
+container.addEventListener('my-event', handler)
+```
+
+### Swap FileSystemService
+
+```typescript
+// Create adapter
+export class WebContainersFS extends FileSystemService {
+  async readFile(path: string) {
+    // Use WebContainers API
+  }
+}
+
+// Register
+const fs = new WebContainersFS()
+registry.register('filesystem', fs)
+```
+
+## 🧪 Testing
+
+### Service Unit Tests
+
+```typescript
+import { FileSystemService } from './services/filesystem'
+
+test('writes and reads file', async () => {
+  const fs = new FileSystemService()
+  await fs.initialize()
+  
+  await fs.writeFile('/test.js', 'hello')
+  const content = await fs.readFile('/test.js', 'utf-8')
+  
+  expect(content).toBe('hello')
+})
+```
+
+### Component Testing
+
+```typescript
+import { EditorComponent } from './ui/editor'
+
+test('renders editor', () => {
+  const container = document.createElement('div')
+  const component = new EditorComponent(actor, container)
+  
+  expect(container.querySelector('.editor')).toBeTruthy()
+})
+```
+
+## 🚦 Status
+
+✅ Core architecture complete
+- [x] Service-oriented design
+- [x] XState state machine
+- [x] Vanilla UI components
+- [x] FileSystemService (IndexedDB)
+- [x] ExecutorService (Web Worker)
+- [x] LoggerService
+- [x] NotificationService
+
+🔄 In Progress
+- [ ] Syntax highlighting (highlight.js)
+- [ ] Keyboard shortcuts
+- [ ] File search (Ctrl+P)
+- [ ] Command palette
+- [ ] Multi-tab editor
+- [ ] Integrated terminal
+- [ ] WebContainers integration
+
+## 📝 License
 
 MIT
+
+## 🙋 Contributing
+
+Contributions welcome! Please ensure:
+- No React framework
+- Vanilla JS/TS only
+- Service-oriented design maintained
+- Documentation updated
