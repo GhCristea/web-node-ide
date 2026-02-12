@@ -1,44 +1,59 @@
 /**
- * Central service registry for dependency injection.
- * Singleton pattern ensures single instance across app lifecycle.
+ * Service registry - dependency injection container.
+ * Singleton pattern for service instances.
  */
 
-export class ServiceRegistry {
-  private static instance: ServiceRegistry;
-  private services = new Map<string, unknown>();
+import { LoggerService } from './logger'
+import { NotificationService } from './notification'
+import { ExecutorService } from './executor'
+import { FileSystemService } from './filesystem'
 
-  private constructor() {}
+export interface ServiceRegistry {
+  logger: LoggerService
+  notification: NotificationService
+  executor: ExecutorService
+  filesystem: FileSystemService
+}
 
-  static getInstance(): ServiceRegistry {
-    if (!ServiceRegistry.instance) {
-      ServiceRegistry.instance = new ServiceRegistry();
+class ServiceContainer {
+  private services: Map<string, any> = new Map()
+
+  register<T>(name: string, instance: T): void {
+    this.services.set(name, instance)
+  }
+
+  get<T>(name: string): T {
+    const instance = this.services.get(name)
+    if (!instance) {
+      throw new Error(`Service not registered: ${name}`)
     }
-    return ServiceRegistry.instance;
+    return instance as T
   }
 
-  register<T = unknown>(key: string, service: T): void {
-    this.services.set(key, service);
-  }
-
-  get<T = unknown>(key: string): T {
-    const service = this.services.get(key);
-    if (!service) {
-      throw new Error(`Service "${key}" not registered. Available: ${Array.from(this.services.keys()).join(', ')}`);
-    }
-    return service as T;
-  }
-
-  has(key: string): boolean {
-    return this.services.has(key);
-  }
-
-  getAll(): Record<string, unknown> {
-    return Object.fromEntries(this.services);
-  }
-
-  clear(): void {
-    this.services.clear();
+  has(name: string): boolean {
+    return this.services.has(name)
   }
 }
 
-export const registry = ServiceRegistry.getInstance();
+// Global singleton instance
+export const registry = new ServiceContainer()
+
+/**
+ * Initialize all services.
+ * Call once at app startup before creating any machines.
+ */
+export async function initializeServices(): Promise<void> {
+  const logger = new LoggerService()
+  const notification = new NotificationService()
+  const executor = new ExecutorService(logger)
+  const filesystem = new FileSystemService()
+
+  // Initialize services that need async setup
+  await filesystem.initialize()
+
+  // Register in container
+  registry.register('logger', logger)
+  registry.register('notification', notification)
+  registry.register('executor', executor)
+  registry.register('filesystem', filesystem)
+}
