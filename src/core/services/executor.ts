@@ -1,10 +1,16 @@
 /**
  * ExecutorService - Execute Node.js code in Web Worker.
- * Provides async execution with stdout/stderr capture.
+ * Provides async execution with stdout/stderr capture and timeout protection.
+ *
+ * Architecture:
+ *   - Lazy initializes Web Worker on first execution
+ *   - Timeout protection via scheduled abort messages
+ *   - Swappable: Can be replaced with RemoteExecutorService for Docker backend
  */
 
 import type { ExecutionResult } from '../types'
 import type { LoggerService } from './logger'
+import ExecutorWorker from '../workers/executor.worker?worker';
 
 export interface ExecutionOptions {
   timeout?: number // ms
@@ -26,18 +32,15 @@ export class ExecutorService {
   }
 
   /**
-   * Initialize worker (lazy loaded).
+   * Initialize worker (lazy loaded on first execution).
    */
   private async initWorker(): Promise<void> {
     if (this.worker) return
 
     try {
-      // Create inline worker from base64-encoded code
-      // In production, use: new Worker('/workers/executor.worker.ts')
-      const workerCode = this.getWorkerCode()
-      const blob = new Blob([workerCode], { type: 'application/javascript' })
-      const url = URL.createObjectURL(blob)
-      this.worker = new Worker(url)
+      // Import worker using Vite's ?worker query parameter
+      // This ensures proper bundling and typescript checking
+      this.worker = new ExecutorWorker()
 
       this.worker.onmessage = (event) => {
         this.handleWorkerMessage(event.data)
@@ -59,7 +62,10 @@ export class ExecutorService {
   }
 
   /**
-   * Execute code string.
+   * Execute code string with optional environment variables.
+   * @param code - JavaScript/TypeScript code to execute
+   * @param options - Execution options (timeout, env variables)
+   * @returns Promise resolving to ExecutionResult with stdout/stderr
    */
   async execute(
     code: string,
@@ -71,7 +77,7 @@ export class ExecutorService {
     const id = this.requestId++
 
     return new Promise((resolve, reject) => {
-      // Set up timeout
+      // Set up timeout handler
       const timeoutHandle = setTimeout(() => {
         this.pending.delete(id)
         reject(new Error(`Execution timeout (${timeout}ms)`))
@@ -79,10 +85,10 @@ export class ExecutorService {
         this.worker?.postMessage({ type: 'ABORT', id })
       }, timeout)
 
-      // Store promise handlers
+      // Store promise handlers for when worker responds
       this.pending.set(id, { resolve, reject, timeout: timeoutHandle })
 
-      // Send to worker
+      // Send execution request to worker
       this.worker!.postMessage({
         type: 'EXECUTE',
         id,
@@ -93,7 +99,7 @@ export class ExecutorService {
   }
 
   /**
-   * Handle worker response.
+   * Handle message from worker.
    */
   private handleWorkerMessage(message: any): void {
     const { type, id, result, error } = message
@@ -115,89 +121,7 @@ export class ExecutorService {
   }
 
   /**
-   * Generate worker code (inline for simplicity).
-   * In production, use separate worker file.
-   */
-  private getWorkerCode(): string {
-    return `
-      let capturedOutput = { stdout: '', stderr: '' };
-      let originalLog = console.log;
-      let originalError = console.error;
-      let originalWarn = console.warn;
-
-      self.onmessage = async (event) => {
-        const { type, id, code, env } = event.data;
-
-        if (type === 'EXECUTE') {
-          try {
-            // Reset output capture
-            capturedOutput = { stdout: '', stderr: '' };
-
-            // Override console methods
-            console.log = (...args) => {
-              capturedOutput.stdout += args.map(a => {
-                try {
-                  return JSON.stringify(a);
-                } catch {
-                  return String(a);
-                }
-              }).join(' ') + '\\n';
-            };
-
-            console.error = (...args) => {
-              capturedOutput.stderr += args.map(a => {
-                try {
-                  return JSON.stringify(a);
-                } catch {
-                  return String(a);
-                }
-              }).join(' ') + '\\n';
-            };
-
-            console.warn = console.error;
-
-            // Create async function and execute
-            const asyncFn = new AsyncFunction('env', code);
-            await asyncFn(env || {});
-
-            // Restore console
-            console.log = originalLog;
-            console.error = originalError;
-            console.warn = originalWarn;
-
-            // Send result
-            self.postMessage({
-              type: 'RESULT',
-              id,
-              result: {
-                stdout: capturedOutput.stdout,
-                stderr: capturedOutput.stderr,
-                exitCode: 0
-              }
-            });
-          } catch (error) {
-            // Restore console
-            console.log = originalLog;
-            console.error = originalError;
-            console.warn = originalWarn;
-
-            // Send error
-            self.postMessage({
-              type: 'RESULT',
-              id,
-              error: error instanceof Error ? error.message : String(error)
-            });
-          }
-        }
-      };
-
-      // AsyncFunction constructor for executing async code
-      const AsyncFunction = Object.getPrototypeOf(async function(){}).constructor;
-    `
-  }
-
-  /**
-   * Terminate worker.
+   * Terminate worker and clean up resources.
    */
   terminate(): void {
     if (this.worker) {
