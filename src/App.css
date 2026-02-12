@@ -1,159 +1,152 @@
-/* Global Vars reused from index.css if needed, but keeping scoped here */
-.ide-container {
-  height: 100vh;
-  width: 100vw;
+.app {
   display: flex;
   flex-direction: column;
-  background-color: #1e1e1e;
-  color: #cccccc;
+  height: 100vh;
+  background: #0f172a;
+  color: #f1f5f9;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
 }
 
-/* --- Header --- */
-.header {
-  height: 35px;
-  background-color: #3c3c3c;
+.app-header {
   display: flex;
+  justify-content: space-between;
   align-items: center;
-  justify-content: space-between; /* Space out title/actions from potential right side items */
-  padding: 0 10px;
-  border-bottom: 1px solid #252526;
-  font-size: 13px;
-  user-select: none;
+  padding: 1rem;
+  border-bottom: 1px solid #1e293b;
+  background: #0f172a;
 }
 
-.header span {
-  font-weight: 600;
-  margin-right: 15px;
+.app-header h1 {
+  margin: 0;
+  font-size: 1.5rem;
+}
+
+.status {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.status-badge {
+  padding: 0.25rem 0.75rem;
+  border-radius: 4px;
+  font-size: 0.85rem;
+  font-weight: 500;
+}
+
+.status-badge.loading {
+  background: #3b82f6;
   color: #fff;
 }
 
-.header button {
-  background: transparent;
+.status-badge.saving {
+  background: #f59e0b;
+  color: #fff;
+}
+
+.status-badge.executing {
+  background: #8b5cf6;
+  color: #fff;
+}
+
+.status-badge.error {
+  background: #ef4444;
+  color: #fff;
+}
+
+.status-badge.dirty {
+  background: #ec4899;
+  color: #fff;
+}
+
+.app-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.editor-controls {
+  display: flex;
+  gap: 0.5rem;
+  padding: 1rem;
+  border-bottom: 1px solid #1e293b;
+  background: #020617;
+}
+
+.btn {
+  padding: 0.5rem 1rem;
   border: none;
-  color: #cccccc;
+  border-radius: 6px;
   cursor: pointer;
-  padding: 4px 8px;
-  border-radius: 3px;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 12px;
-  transition:
-    background 0.2s,
-    color 0.2s;
+  font-size: 0.95rem;
+  font-weight: 500;
+  transition: all 0.2s ease;
 }
 
-.header button:hover:not(:disabled) {
-  background-color: #505050;
-  color: #fff;
-}
-
-.header button:disabled {
+.btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
 }
 
-/* --- Resizable Panels --- */
-.resize-handle {
-  background-color: transparent; /* Invisible but clickable by default */
-  transition: background-color 0.2s;
-  z-index: 10;
-}
-.resize-handle:hover,
-.resize-handle[data-resize-handle-active] {
-  background-color: #007acc; /* VS Code blue on hover */
+.btn-primary {
+  background: #38bdf8;
+  color: #0f172a;
 }
 
-.resize-handle.vertical {
-  width: 4px;
-  cursor: col-resize;
-  background-color: #252526; /* separator line */
+.btn-primary:hover:not(:disabled) {
+  background: #0ea5e9;
+  transform: translateY(-1px);
 }
 
-.resize-handle.horizontal {
-  height: 4px;
-  cursor: row-resize;
-  background-color: #252526; /* separator line */
+.btn-small {
+  padding: 0.25rem 0.75rem;
+  font-size: 0.85rem;
 }
 
-/* --- Sidebar / File Tree --- */
-.sidebar {
-  background-color: #252526;
-  height: 100%;
-  display: flex;
-  flex-direction: column;
-}
-
-.file-tree-container {
+.editor-area {
   flex: 1;
-  overflow-y: auto;
-  padding-top: 5px;
-}
-
-.file-tree-title {
-  font-size: 11px;
-  font-weight: bold;
-  color: #bbbbbb;
-  padding: 0 10px;
-  margin-bottom: 5px;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
-
-.tree-item {
   display: flex;
-  align-items: center;
-  padding: 3px 10px;
-  cursor: pointer;
-  font-size: 13px;
-  color: #cccccc;
-  user-select: none;
-  white-space: nowrap;
-  border-left: 2px solid transparent; /* marker placeholder */
-}
-
-.tree-item:hover {
-  background-color: #2a2d2e;
-  color: #ffffff;
-}
-
-.tree-item.selected {
-  background-color: #37373d;
-  color: #ffffff;
-  border-left-color: #007acc;
-}
-
-.tree-level-spacer {
-  display: inline-block;
-  width: 10px; /* Indent per level handled in component via padding-left */
-}
-
-/* --- Editor Area --- */
-.editor-container {
-  height: 100%;
-  width: 100%;
   overflow: hidden;
-  position: relative;
 }
 
-/* Placeholder for when no file is selected */
-.empty-editor {
+.code-editor {
+  flex: 1;
+  padding: 1rem;
+  background: #1e293b;
+  color: #e2e8f0;
+  border: none;
+  font-family: 'Monaco', 'Courier New', monospace;
+  font-size: 0.95rem;
+  line-height: 1.6;
+  resize: none;
+  outline: none;
+}
+
+.code-editor:focus {
+  outline: 2px solid #38bdf8;
+  outline-offset: -1px;
+}
+
+.error-panel {
+  padding: 1rem;
+  background: #7f1d1d;
+  border-top: 1px solid #991b1b;
   display: flex;
-  height: 100%;
-  width: 100%;
+  justify-content: space-between;
   align-items: center;
-  justify-content: center;
-  color: #555;
-  font-size: 14px;
-  background-color: #1e1e1e;
 }
 
-/* --- Terminal Area --- */
-.terminal-container {
-  height: 100%;
-  width: 100%;
-  background-color: #1e1e1e;
-  border-top: 1px solid #333;
-  padding: 0;
-  overflow: hidden;
+.error-message {
+  margin: 0;
+  color: #fecaca;
+  font-size: 0.95rem;
+}
+
+.error-panel .btn {
+  background: #991b1b;
+  color: #fecaca;
+}
+
+.error-panel .btn:hover {
+  background: #b91c1c;
 }
