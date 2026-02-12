@@ -1,23 +1,23 @@
 /**
- * FileTree UI component - displays directory structure.
- * Pure vanilla JavaScript, syncs with FileService.
+ * FileTreeComponent - displays virtual file system tree.
+ * Pure vanilla JavaScript.
  */
 
-import { registry } from '../core/services';
-import type { FileService } from '../core/services';
+import type { FileSystemService } from '../core/services'
+import type { Dirent } from '../core/services/filesystem'
 
 export class FileTreeComponent {
-  private container: HTMLElement;
-  private fileService: FileService;
-  private expandedDirs = new Set<string>();
+  private container: HTMLElement
+  private filesystem: FileSystemService
+  private tree: Map<string, boolean> = new Map() // path -> expanded state
 
-  constructor(container: HTMLElement) {
-    this.container = container;
-    this.fileService = registry.get('file');
-    this.render();
+  constructor(container: HTMLElement, filesystem: FileSystemService) {
+    this.container = container
+    this.filesystem = filesystem
+    this.render()
   }
 
-  private render(): void {
+  private async render(): Promise<void> {
     this.container.innerHTML = `
       <div class="file-tree">
         <header class="file-tree-header">
@@ -25,90 +25,124 @@ export class FileTreeComponent {
         </header>
         <div id="file-tree-content" class="file-tree-content"></div>
       </div>
-    `;
-    this.loadDirectory('/');
-  }
+    `
 
-  private async loadDirectory(path: string): Promise<void> {
+    const content = this.container.querySelector('#file-tree-content') as HTMLElement
+
     try {
-      const files = await this.fileService.listDirectory(path);
-      const content = this.container.querySelector('#file-tree-content') as HTMLElement;
+      await this.renderDirectory('/', content, 0)
+    } catch (error) {
+      content.innerHTML = `<div class="file-tree-error">Error loading files</div>`
+    }
+  }
 
-      if (files.length === 0) {
-        content.innerHTML = '<p class="file-tree-empty">No files</p>';
-        return;
+  private async renderDirectory(
+    path: string,
+    container: HTMLElement,
+    depth: number
+  ): Promise<void> {
+    try {
+      const entries = (await this.filesystem.readdir(path, {
+        withFileTypes: true,
+      })) as Dirent[]
+
+      // Sort: directories first, then alphabetically
+      const sorted = entries.sort((a, b) => {
+        const aIsDir = a.isDirectory()
+        const bIsDir = b.isDirectory()
+        if (aIsDir !== bIsDir) return bIsDir ? 1 : -1
+        return a.name.localeCompare(b.name)
+      })
+
+      sorted.forEach((entry) => {
+        const fullPath = path === '/' ? `/${entry.name}` : `${path}/${entry.name}`
+        this.renderEntry(entry, fullPath, container, depth)
+      })
+    } catch (error) {
+      // Directory doesn't exist or is empty
+    }
+  }
+
+  private renderEntry(
+    entry: Dirent,
+    fullPath: string,
+    container: HTMLElement,
+    depth: number
+  ): void {
+    const isDir = entry.isDirectory()
+    const isExpanded = this.tree.get(fullPath) ?? false
+
+    const item = document.createElement('div')
+    item.className = 'file-tree-item'
+    item.style.paddingLeft = `${depth * 1.5}rem`
+
+    // Toggle button for directories
+    if (isDir) {
+      const toggle = document.createElement('button')
+      toggle.className = 'file-tree-toggle'
+      toggle.textContent = isExpanded ? '▼' : '▶'
+      toggle.onclick = (e) => {
+        e.stopPropagation()
+        this.toggleDirectory(fullPath, isExpanded, container)
       }
-
-      const html = files
-        .map((file) => {
-          const isDir = file.endsWith('/');
-          const name = file.split('/').filter(Boolean).pop() || file;
-          const icon = isDir ? '📁' : '📄';
-          const id = `file-${file.replace(/\//g, '-')}`;
-
-          return `
-            <div class="file-tree-item" data-path="${file}">
-              ${isDir ? `<button class="file-tree-toggle" data-path="${file}">▶</button>` : '<span class="file-tree-spacer"></span>'}
-              <span class="file-tree-icon">${icon}</span>
-              <span class="file-tree-name" data-path="${file}">${this.escapeHtml(name)}</span>
-            </div>
-          `;
-        })
-        .join('');
-
-      content.innerHTML = html;
-      this.attachListeners();
-    } catch (err) {
-      const content = this.container.querySelector('#file-tree-content') as HTMLElement;
-      content.innerHTML = `<p class="file-tree-error">Error loading files</p>`;
-    }
-  }
-
-  private attachListeners(): void {
-    // Attach click listeners to file names
-    this.container.querySelectorAll('.file-tree-name').forEach((el) => {
-      el.addEventListener('click', (e) => {
-        const path = (e.target as HTMLElement).getAttribute('data-path');
-        if (path) {
-          this.onFileSelect(path);
-        }
-      });
-    });
-
-    // Attach toggle listeners
-    this.container.querySelectorAll('.file-tree-toggle').forEach((el) => {
-      el.addEventListener('click', (e) => {
-        const path = (e.currentTarget as HTMLElement).getAttribute('data-path');
-        if (path) {
-          this.onToggleDir(path, el as HTMLElement);
-        }
-      });
-    });
-  }
-
-  private onFileSelect(path: string): void {
-    // Dispatch custom event that parent can listen to
-    const event = new CustomEvent('file-select', { detail: { path } });
-    this.container.dispatchEvent(event);
-  }
-
-  private onToggleDir(path: string, button: HTMLElement): void {
-    if (this.expandedDirs.has(path)) {
-      this.expandedDirs.delete(path);
-      button.textContent = '▶';
+      item.appendChild(toggle)
     } else {
-      this.expandedDirs.add(path);
-      button.textContent = '▼';
+      const spacer = document.createElement('div')
+      spacer.className = 'file-tree-spacer'
+      item.appendChild(spacer)
+    }
+
+    // Icon
+    const icon = document.createElement('span')
+    icon.className = 'file-tree-icon'
+    icon.textContent = isDir ? '📁' : '📄'
+    item.appendChild(icon)
+
+    // Name
+    const name = document.createElement('span')
+    name.className = 'file-tree-name'
+    name.textContent = entry.name
+    item.appendChild(name)
+
+    // Click to open file
+    if (!isDir) {
+      item.style.cursor = 'pointer'
+      item.onclick = () => {
+        this.dispatchFileSelect(fullPath)
+      }
+    }
+
+    container.appendChild(item)
+
+    // Render children if directory is expanded
+    if (isDir && isExpanded) {
+      this.renderDirectorySync(fullPath, container, depth + 1)
     }
   }
 
-  private escapeHtml(text: string): string {
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
+  private renderDirectorySync(path: string, container: HTMLElement, depth: number): void {
+    // Async-safe version: schedule rendering
+    this.renderDirectory(path, container, depth).catch((err) => {
+      console.error(`Failed to render directory ${path}:`, err)
+    })
   }
 
-  async refresh(): Promise<void> {
-    await this.loadDirectory('/');
+  private toggleDirectory(
+    path: string,
+    isExpanded: boolean,
+    container: HTMLElement
+  ): void {
+    // Update expansion state
+    this.tree.set(path, !isExpanded)
+    // Re-render entire tree
+    this.render().catch((err) => console.error('Failed to render:', err))
+  }
+
+  private dispatchFileSelect(path: string): void {
+    const event = new CustomEvent('file-select', {
+      detail: { path },
+      bubbles: true,
+    })
+    this.container.dispatchEvent(event)
   }
 }
