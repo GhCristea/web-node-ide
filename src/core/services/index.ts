@@ -1,7 +1,3 @@
-/**
- * Services module - dependency injection and service container.
- */
-
 export { LoggerService } from './logger'
 export { NotificationService } from './notification'
 export { ExecutorService } from './executor'

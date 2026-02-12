@@ -1,8 +1,3 @@
-/**
- * EditorComponent - Code editor with execution controls.
- * Pure vanilla JavaScript, syncs with editor state machine.
- */
-
 import type { Actor, Snapshot } from 'xstate'
 import type { editorMachine } from '../core/machines/editor-machine'
 import { registry } from '../core/services'
@@ -14,7 +9,7 @@ export class EditorComponent {
   private textarea: HTMLTextAreaElement | null = null
   private statusArea: HTMLElement | null = null
   private errorPanel: HTMLElement | null = null
-  private unsubscribe: (() => void) | null = null
+  private subscription: { unsubscribe: () => void } | null = null
   private executor: ExecutorService
   private filesystem: FileSystemService
   private currentPath: string | null = null
@@ -36,14 +31,14 @@ export class EditorComponent {
           <h1 id="file-path">Untitled</h1>
           <div class="status" id="status"></div>
         </header>
-        
+
         <div class="editor-controls">
           <button id="btn-save" class="btn btn-primary">💾 Save</button>
           <button id="btn-run" class="btn btn-primary">▶ Run</button>
         </div>
-        
+
         <textarea id="code-editor" class="code-editor" placeholder="Select a file to edit..."></textarea>
-        
+
         <div id="error-panel" class="error-panel hidden">
           <p id="error-message" class="error-message"></p>
           <button id="btn-dismiss" class="btn btn-small">✕</button>
@@ -73,7 +68,7 @@ export class EditorComponent {
       this.hideError()
     })
 
-    this.textarea?.addEventListener('input', (e) => {
+    this.textarea?.addEventListener('input', e => {
       const content = (e.target as HTMLTextAreaElement).value
       this.actor.send({ type: 'EDIT', content })
     })
@@ -105,11 +100,7 @@ export class EditorComponent {
       const code = this.textarea.value
       const result = await this.executor.execute(code, { timeout: 5000 })
 
-      // Output result through actor
-      this.actor.send({
-        type: 'EXECUTE',
-        result
-      })
+      this.actor.send({ type: 'EXECUTE', result })
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Execution failed'
       this.showError(message)
@@ -118,45 +109,39 @@ export class EditorComponent {
   }
 
   private subscribeToState(): void {
-    this.unsubscribe = this.actor.subscribe((snapshot) => {
+    this.unsubscribe = this.actor.subscribe(snapshot => {
       this.updateUI(snapshot)
     })
   }
 
   private async updateUI(snapshot: Snapshot<typeof editorMachine>): Promise<void> {
     const context = snapshot.context
-    const state = snapshot.value
 
-    // Update file path display
     const pathEl = this.container.querySelector('#file-path') as HTMLElement
     if (context.currentPath) {
       this.currentPath = context.currentPath
       pathEl.textContent = context.currentPath.split('/').pop() || context.currentPath
     }
 
-    // Update textarea
     if (this.textarea && this.textarea.value !== context.content) {
       this.textarea.value = context.content
     }
 
-    // Update button states
     const btnSave = this.container.querySelector('#btn-save') as HTMLButtonElement
     const btnRun = this.container.querySelector('#btn-run') as HTMLButtonElement
 
     const isDirty = context.content !== context.lastSaved
-    btnSave.disabled = !isDirty || typeof state === 'object' && (state as any).saving
-    btnRun.disabled = !context.currentPath || typeof state === 'object' && (state as any).executing
+    btnSave.disabled = !isDirty || snapshot.matches('saving')
+    btnRun.disabled = !context.currentPath || snapshot.matches('executing')
     this.textarea!.disabled = !context.currentPath
 
-    // Update status badges
     this.updateStatus({
-      saving: typeof state === 'object' && (state as any).saving,
-      executing: typeof state === 'object' && (state as any).executing,
+      saving: snapshot.matches('saving'),
+      executing: snapshot.matches('executing'),
       error: context.error !== null,
       dirty: isDirty
     })
 
-    // Update error panel
     if (context.error) {
       this.showError(context.error)
     } else {
@@ -164,12 +149,7 @@ export class EditorComponent {
     }
   }
 
-  private updateStatus(status: {
-    saving: boolean
-    executing: boolean
-    error: boolean
-    dirty: boolean
-  }): void {
+  private updateStatus(status: { saving: boolean; executing: boolean; error: boolean; dirty: boolean }): void {
     const badges: string[] = []
 
     if (status.saving) badges.push('<span class="status-badge saving">Saving...</span>')

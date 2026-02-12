@@ -26,9 +26,7 @@ describe('ServiceRegistry', () => {
   })
 
   it('should throw when retrieving unregistered service', () => {
-    expect(() => registry.get('nonexistent')).toThrow(
-      'Service "nonexistent" not registered'
-    )
+    expect(() => registry.get('nonexistent')).toThrow('Service "nonexistent" not registered')
   })
 
   it('should register multiple services', () => {
