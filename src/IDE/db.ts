@@ -1,6 +1,6 @@
 import { sqlite3Worker1Promiser } from '@sqlite.org/sqlite-wasm'
 import type { SqlitePromiser } from '../types/sqlite'
-import type { FileRecord } from '../types/fileSystem'
+import type { FileMetadata } from '../types/fileSystem'
 
 let dbPromise: Promise<SqlitePromiser> | null = null
 let dbId: string | null = null
@@ -60,14 +60,14 @@ export async function initDb() {
   return dbPromise
 }
 
-export async function getFilesFromDb(): Promise<FileRecord[]> {
+export async function getFilesMetadata(): Promise<FileMetadata[]> {
   const promiser = await initDb()
   const result = await promiser('exec', {
-    sql: 'SELECT * FROM files ORDER BY type DESC, name ASC',
+    sql: 'SELECT id, name, parentId, type, updated_at FROM files ORDER BY type DESC, name ASC',
     rowMode: 'object',
     dbId
   })
-  return (result.result.resultRows ?? []) as unknown as FileRecord[]
+  return (result.result.resultRows ?? []) as unknown as FileMetadata[]
 }
 
 export async function saveFileContent(id: string, content: string) {
@@ -171,6 +171,26 @@ export async function getFileContent(id: string): Promise<string> {
   })
   const rows = result.result.resultRows
   return rows && rows.length > 0 ? (rows[0] as { content: string }).content : ''
+}
+
+export async function getBatchFileContent(ids: string[]): Promise<Record<string, string>> {
+  if (ids.length === 0) return {}
+  const promiser = await initDb()
+  const placeholders = ids.map(() => '?').join(',')
+  const result = await promiser('exec', {
+    sql: `SELECT id, content FROM files WHERE id IN (${placeholders})`,
+    bind: ids,
+    rowMode: 'object',
+    dbId
+  })
+  const rows = (result.result.resultRows ?? []) as { id: string; content: string }[]
+  return rows.reduce(
+    (acc, row) => {
+      acc[row.id] = row.content
+      return acc
+    },
+    {} as Record<string, string>
+  )
 }
 
 export async function resetFileSystem() {

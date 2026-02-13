@@ -1,10 +1,10 @@
 import type { WebContainer } from '@webcontainer/api'
-import { buildTree, generateFilePaths } from './fileUtils'
+import { buildTree, buildWebContainerTree, generatePaths } from './fileUtils'
 import type { IDEDependencies } from './types'
-import type { FileRecord } from '../../types/fileSystem'
+import type { FileMetadata } from '../../types/fileSystem'
 
 export function createIDEService(deps: IDEDependencies) {
-  let _filesCache: FileRecord[] = []
+  let _filesCache: FileMetadata[] = []
 
   const getPathFromCache = (fileId: string): string | null => {
     const file = _filesCache.find(f => f.id === fileId)
@@ -21,7 +21,10 @@ export function createIDEService(deps: IDEDependencies) {
     return parts.join('/')
   }
 
-  const resolveParentId = (selectedFileId: string | null, explicitParentId?: string | null): string | null => {
+  const resolveParentId = (
+    selectedFileId: string | null,
+    explicitParentId?: string | null
+  ): string | null => {
     if (explicitParentId !== undefined) {
       return explicitParentId
     }
@@ -38,17 +41,43 @@ export function createIDEService(deps: IDEDependencies) {
   return {
     initialize: deps.db.initDb,
 
-    async loadFiles(isWcReady: boolean, mount: (paths: Record<string, string>) => Promise<void>) {
-      const allFiles = await deps.db.getFilesFromDb()
+    async loadFiles() {
+      const allFiles = await deps.db.getFilesMetadata()
       _filesCache = allFiles
-
       const tree = buildTree(allFiles)
+      return tree
+    },
 
-      if (isWcReady) {
-        await mount(generateFilePaths(allFiles))
+    async mountProjectFiles(webContainer: WebContainer) {
+      if (!webContainer) return
+
+      const pathsMap = generatePaths(_filesCache)
+      const validFiles = _filesCache.filter(f => {
+        if (f.type === 'folder') return false
+        const path = pathsMap.get(f.id)
+        return path && !path.split('/').includes('node_modules')
+      })
+
+      const ids = validFiles.map(f => f.id)
+
+      const chunkSize = 100
+      const mountTree: Record<string, string> = {}
+
+      for (let i = 0; i < ids.length; i += chunkSize) {
+        const chunkIds = ids.slice(i, i + chunkSize)
+        const contents = await deps.db.getBatchFileContent(chunkIds)
+
+        chunkIds.forEach(id => {
+          const path = pathsMap.get(id)
+          if (path && contents[id] !== undefined) {
+            mountTree[path] = contents[id]
+          }
+        })
       }
 
-      return tree
+      const tree = buildWebContainerTree(mountTree)
+      await webContainer.mount(tree)
+      console.log(`Mounted ${Object.keys(mountTree).length} files to WebContainer`)
     },
 
     async getFileContent(id: string) {
@@ -63,11 +92,6 @@ export function createIDEService(deps: IDEDependencies) {
     ) {
       await deps.db.saveFileContent(id, content)
 
-      const cachedFile = _filesCache.find(f => f.id === id)
-      if (cachedFile) {
-        cachedFile.content = content
-      }
-
       if (isWcReady) {
         const path = getPathFromCache(id)
         if (path) {
@@ -81,22 +105,78 @@ export function createIDEService(deps: IDEDependencies) {
       name: string,
       type: 'file' | 'folder',
       selectedFileId: string | null,
-      explicitParentId?: string | null
+      explicitParentId?: string | null,
+      webContainer?: WebContainer | null
     ) {
       const parentId = resolveParentId(selectedFileId, explicitParentId)
-      await deps.db.createFile(name, parentId, type, type === 'file' ? '' : '')
+      const newId = await deps.db.createFile(name, parentId, type, type === 'file' ? '' : '')
+
+      if (webContainer) {
+        let parentPath = ''
+        if (parentId) {
+          const parentPathStr = getPathFromCache(parentId)
+          if (parentPathStr) parentPath = parentPathStr
+        }
+
+        const fullPath = parentPath ? `${parentPath}/${name}` : name
+
+        if (type === 'folder') {
+          await webContainer.fs.mkdir(fullPath)
+        } else {
+          await webContainer.fs.writeFile(fullPath, '')
+        }
+      }
+      return newId
     },
 
-    async deleteNode(id: string) {
+    async deleteNode(id: string, webContainer?: WebContainer | null) {
+      const path = getPathFromCache(id)
       await deps.db.deleteFile(id)
+
+      if (webContainer && path) {
+        await webContainer.fs.rm(path, { recursive: true, force: true })
+      }
     },
 
-    async renameNode(id: string, newName: string) {
+    async renameNode(id: string, newName: string, webContainer?: WebContainer | null) {
+      const oldPath = getPathFromCache(id)
       await deps.db.renameFile(id, newName)
+
+      if (webContainer && oldPath) {
+        const pathParts = oldPath.split('/')
+        pathParts.pop()
+        pathParts.push(newName)
+        const newPath = pathParts.join('/')
+        await webContainer.fs.rename(oldPath, newPath)
+      }
     },
 
-    async moveNode(id: string, newParentId: string | null) {
+    async moveNode(
+      id: string,
+      newParentId: string | null,
+      webContainer?: WebContainer | null
+    ) {
+      const oldPath = getPathFromCache(id)
       await deps.db.moveFile(id, newParentId)
+
+      if (webContainer && oldPath) {
+        let newParentPath = ''
+        if (newParentId) {
+          const parent = _filesCache.find(f => f.id === newParentId)
+
+          if (parent) {
+            console.log('defined parent')
+          }
+          const p = getPathFromCache(newParentId)
+          if (p) newParentPath = p
+        }
+
+        const fileName = oldPath.split('/').pop()
+        const newPath = newParentPath ? `${newParentPath}/${fileName}` : fileName
+        if (newPath) {
+          await webContainer.fs.rename(oldPath, newPath)
+        }
+      }
     },
 
     async resetFileSystem() {
@@ -112,7 +192,9 @@ export function createIDEService(deps: IDEDependencies) {
       const path = getPathFromCache(fileId)
       if (!path) return
 
-      deps.terminal.write(`\r\n\x1b[1;36m➤ Executing ${path}...\x1b[0m\r\n`)
+      deps.terminal.write(
+        `\r\n\x1b[1;36m➤ ${new Date().toUTCString()} Executing ${path}...\x1b[0m\r\n`
+      )
 
       try {
         const process = await webContainer.spawn('node', [path])

@@ -1,10 +1,10 @@
 import type { DirectoryNode, SymlinkNode, FileNode as WebContainerFileNode } from '@webcontainer/api'
-import type { FileNode, FileRecord } from '../../types/fileSystem'
+import type { FileNode, FileRecord, FileMetadata } from '../../types/fileSystem'
 
 export interface FileSystemTree {
   [name: string]: DirectoryNode | WebContainerFileNode | SymlinkNode
 }
-export function buildTree(files: FileRecord[]): FileNode[] {
+export function buildTree(files: FileMetadata[]): FileNode[] {
   const nodeMap = new Map<string, FileNode>()
   const roots: FileNode[] = []
 
@@ -31,6 +31,33 @@ export function buildTree(files: FileRecord[]): FileNode[] {
   })
 
   return roots
+}
+
+export function generatePaths(files: FileMetadata[]): Map<string, string> {
+  const fileMap = new Map<string, FileMetadata>(files.map(f => [f.id, f]))
+  const idToPath = new Map<string, string>()
+
+  files.forEach(file => {
+    if (file.type === 'folder') return
+
+    let current: FileMetadata | undefined = file
+    const pathParts: string[] = []
+
+    while (current) {
+      pathParts.unshift(current.name)
+      if (current.parentId) {
+        current = fileMap.get(current.parentId)
+      } else {
+        current = undefined
+      }
+    }
+
+    if (pathParts.length > 0) {
+      idToPath.set(file.id, pathParts.join('/'))
+    }
+  })
+
+  return idToPath
 }
 
 export function generateFilePaths(files: FileRecord[]): Record<string, string> {

@@ -42,7 +42,7 @@ This project uses a **Service Layer Pattern** to decouple business logic from th
    npm run dev
    ```
 
-   *Note: Must be served over HTTPS or localhost due to `SharedArrayBuffer` security requirements.*
+   _Note: Must be served over HTTPS or localhost due to `SharedArrayBuffer` security requirements._
 
 ## Usage
 

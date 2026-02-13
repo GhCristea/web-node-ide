@@ -1,7 +1,6 @@
 import { WebContainer } from '@webcontainer/api'
 import * as db from './db'
 import { createIDEService } from './service/ideService'
-import { buildWebContainerTree } from './service/fileUtils'
 import type { FileNode } from '../types/fileSystem'
 import { createWithSignal } from 'solid-zustand'
 
@@ -66,13 +65,13 @@ export const useIDEStore = createWithSignal<IDEState>((set, get) => {
           set({ error: String(e) })
         }
 
-        const tree = await service.loadFiles(get().isWcReady, async filesMap => {
-          const wc = get().webContainer
-          if (wc) {
-            const tree = buildWebContainerTree(filesMap)
-            await wc.mount(tree)
-          }
-        })
+        const tree = await service.loadFiles()
+
+        const wc = get().webContainer
+        if (wc) {
+          await service.mountProjectFiles(wc)
+        }
+
         set({ files: tree, isLoading: false })
       } catch (err) {
         set({ error: `DB Init Failed: ${err}`, isLoading: false })
@@ -109,10 +108,10 @@ export const useIDEStore = createWithSignal<IDEState>((set, get) => {
 
     createFile: async (name, type, explicitParentId) => {
       try {
-        const { selectedFileId } = get()
-        await service.createNode(name, type, selectedFileId, explicitParentId)
+        const { selectedFileId, webContainer } = get()
+        await service.createNode(name, type, selectedFileId, explicitParentId, webContainer)
 
-        const tree = await service.loadFiles(false, async () => {})
+        const tree = await service.loadFiles()
 
         set({ files: tree })
       } catch (err) {
@@ -122,8 +121,9 @@ export const useIDEStore = createWithSignal<IDEState>((set, get) => {
 
     renameNode: async (id, newName) => {
       try {
-        await service.renameNode(id, newName)
-        const tree = await service.loadFiles(false, async () => {})
+        const { webContainer } = get()
+        await service.renameNode(id, newName, webContainer)
+        const tree = await service.loadFiles()
         set({ files: tree })
       } catch (err) {
         console.error(err)
@@ -133,8 +133,9 @@ export const useIDEStore = createWithSignal<IDEState>((set, get) => {
 
     moveNode: async (id, newParentId) => {
       try {
-        await service.moveNode(id, newParentId)
-        const tree = await service.loadFiles(false, async () => {})
+        const { webContainer } = get()
+        await service.moveNode(id, newParentId, webContainer)
+        const tree = await service.loadFiles()
         set({ files: tree })
       } catch (err) {
         console.error(err)
@@ -144,12 +145,12 @@ export const useIDEStore = createWithSignal<IDEState>((set, get) => {
 
     deleteNode: async id => {
       try {
-        await service.deleteNode(id)
-        const { selectedFileId } = get()
+        const { webContainer, selectedFileId } = get()
+        await service.deleteNode(id, webContainer)
         if (selectedFileId === id) {
           set({ selectedFileId: null })
         }
-        const tree = await service.loadFiles(false, async () => {})
+        const tree = await service.loadFiles()
         set({ files: tree })
       } catch (err) {
         console.error(err)

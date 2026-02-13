@@ -25,7 +25,7 @@ export function ToastContainer() {
                 background:
                   toast.type === 'error' ? '#e53e3e'
                   : toast.type === 'success' ? '#38a169'
-                  : '#3182ce',
+                      : '#3182ce',
                 color: 'white',
                 padding: '10px 20px',
                 'border-radius': '4px',
