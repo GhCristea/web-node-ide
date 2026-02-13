@@ -1,390 +1,376 @@
-import { useState, useEffect, useRef } from 'react';
-import { ChevronDown, ChevronRight, File, Folder, Trash2, Edit2, Plus } from 'lucide-react';
-import { useIDE } from './useIDE';
-
-export interface FileNode {
-  id: string;
-  name: string;
-  parentId: string | null;
-  type: 'file' | 'folder';
-  children?: FileNode[];
-}
+import { createSignal, createEffect, onCleanup, Show, For } from 'solid-js'
+import { ChevronDown, ChevronRight, File, Folder, Trash2, Edit2, Plus } from 'lucide-solid'
+import { useIDEStore } from './IDEStore'
+import type { FileNode } from '../types/fileSystem'
 
 interface FileTreeProps {
-  nodes: FileNode[];
-  onFileSelect: (id: string) => void;
-  selectedFileId: string | null;
+  nodes: FileNode[]
+  onFileSelect: (id: string | null) => void
+  selectedFileId: string | null
 }
 
-const TreeItem = ({
-  node,
-  onFileSelect,
-  selectedFileId,
-  level = 0,
-  onContextMenu,
-  editingId,
-  onRenameSubmit,
-  onCreateFile,
-  onDragStart,
-  onDragOver,
-  onDrop
-}: {
-  node: FileNode;
-  onFileSelect: (id: string) => void;
-  selectedFileId: string | null;
-  level?: number;
-  onContextMenu: (e: React.MouseEvent, nodeId: string) => void;
-  editingId: string | null;
-  onRenameSubmit: (id: string, newName: string) => void;
-  onCreateFile: (parentId: string) => void;
-  onDragStart: (e: React.DragEvent, node: FileNode) => void;
-  onDragOver: (e: React.DragEvent, node: FileNode) => void;
-  onDrop: (e: React.DragEvent, targetNode: FileNode) => void;
+const TreeItem = (props: {
+  node: FileNode
+  onFileSelect: (id: string | null) => void
+  selectedFileId: string | null
+  level?: number
+  onContextMenu: (e: MouseEvent, nodeId: string) => void
+  editingId: string | null
+  onRenameSubmit: (id: string, newName: string) => void
+  onCreateFile: (parentId: string) => void
+  onDragStart: (e: DragEvent, node: FileNode) => void
+  onDragOver: (e: DragEvent, node: FileNode) => void
+  onDrop: (e: DragEvent, targetNode: FileNode) => void
 }) => {
-  const [isOpen, setIsOpen] = useState(false);
-  const [editValue, setEditValue] = useState(node.name);
-  const [isHovered, setIsHovered] = useState(false);
-  const [isDragOver, setIsDragOver] = useState(false); // Visual feedback for drop target
-  const inputRef = useRef<HTMLInputElement>(null);
-  const isFolder = node.type === 'folder';
-  const isSelected = selectedFileId === node.id;
-  const isEditing = editingId === node.id;
+  const [isOpen, setIsOpen] = createSignal(false)
+  const [editValue, setEditValue] = createSignal('')
+  const [isHovered, setIsHovered] = createSignal(false)
+  const [isDragOver, setIsDragOver] = createSignal(false)
+  let inputRef: HTMLInputElement | undefined
 
-  useEffect(() => {
-    if (isEditing && inputRef.current) {
-      inputRef.current.focus();
-      inputRef.current.select();
+  const isFolder = () => props.node.type === 'folder'
+  const isSelected = () => props.selectedFileId === props.node.id
+  const isEditing = () => props.editingId === props.node.id
+  const level = () => props.level || 0
+
+  createEffect(() => {
+    if (isEditing()) {
+      setEditValue(props.node.name)
     }
-  }, [isEditing]);
+  })
 
-  const handleClick = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (isFolder) {
-      setIsOpen(!isOpen);
+  createEffect(() => {
+    if (isEditing() && inputRef) {
+      inputRef.focus()
+      inputRef.select()
+    }
+  })
+
+  const handleClick = (e: MouseEvent) => {
+    e.stopPropagation()
+    if (isFolder()) {
+      setIsOpen(!isOpen())
     } else {
-      onFileSelect(node.id);
+      props.onFileSelect(props.node.id)
     }
-  };
+  }
 
-  const handleRightClick = (e: React.MouseEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    onContextMenu(e, node.id);
-  };
+  const handleRightClick = (e: MouseEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    props.onContextMenu(e, props.node.id)
+  }
 
-  const handleCreateClick = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    onCreateFile(node.id);
-  };
+  const handleCreateClick = (e: MouseEvent) => {
+    e.stopPropagation()
+    props.onCreateFile(props.node.id)
+  }
 
-  const handleKeyDown = (e: React.KeyboardEvent) => {
+  const handleKeyDown = (e: KeyboardEvent) => {
     if (e.key === 'Enter') {
-      onRenameSubmit(node.id, editValue);
+      props.onRenameSubmit(props.node.id, editValue())
     } else if (e.key === 'Escape') {
-      onRenameSubmit(node.id, node.name);
+      props.onRenameSubmit(props.node.id, props.node.name)
     }
-  };
+  }
 
-  const handleDragStart = (e: React.DragEvent) => {
-    e.stopPropagation();
-    onDragStart(e, node);
-  };
+  const handleDragStart = (e: DragEvent) => {
+    e.stopPropagation()
+    props.onDragStart(e, props.node)
+  }
 
-  const handleDragOver = (e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    if (isFolder) {
-      setIsDragOver(true);
-      onDragOver(e, node);
+  const handleDragOver = (e: DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    if (isFolder()) {
+      setIsDragOver(true)
+      props.onDragOver(e, props.node)
     }
-  };
+  }
 
-  const handleDragLeave = (e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setIsDragOver(false);
-  };
+  const handleDragLeave = (e: DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setIsDragOver(false)
+  }
 
-  const handleDrop = (e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setIsDragOver(false);
-    onDrop(e, node);
-  };
+  const handleDrop = (e: DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setIsDragOver(false)
+    props.onDrop(e, props.node)
+  }
 
   return (
     <div
-      draggable={!isEditing}
+      draggable={!isEditing()}
       onDragStart={handleDragStart}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
     >
       <div
-        className={`tree-item ${isSelected ? 'selected' : ''}`}
+        class={`tree-item ${isSelected() ? 'selected' : ''}`}
         style={{
-          paddingLeft: `${10 + level * 12}px`,
-          backgroundColor: isDragOver ? '#37373d' : undefined,
-          border: isDragOver ? '1px dashed #007fd4' : '1px solid transparent'
+          'padding-left': `${10 + level() * 12}px`,
+          'background-color': isDragOver() ? '#37373d' : undefined,
+          border: isDragOver() ? '1px dashed #007fd4' : '1px solid transparent'
         }}
         onClick={handleClick}
         onContextMenu={handleRightClick}
         onMouseEnter={() => setIsHovered(true)}
         onMouseLeave={() => setIsHovered(false)}
       >
-        <span style={{ marginRight: '4px', display: 'flex', alignItems: 'center', opacity: 0.8 }}>
-          {
-            isFolder ?
-              isOpen ?
-                <ChevronDown size={14} />
-              : <ChevronRight size={14} />
-            : <span style={{ width: 14 }} /> // Spacer for alignment
-          }
+        <span style={{ 'margin-right': '4px', display: 'flex', 'align-items': 'center', opacity: 0.8 }}>
+          <Show when={isFolder()} fallback={<span style={{ width: '14px' }} />}>
+            <Show when={isOpen()} fallback={<ChevronRight size={14} />}>
+              <ChevronDown size={14} />
+            </Show>
+          </Show>
         </span>
 
         <span
           style={{
-            marginRight: '6px',
+            'margin-right': '6px',
             display: 'flex',
-            alignItems: 'center',
-            color: isFolder ? '#dcb67a' : '#858585'
+            'align-items': 'center',
+            color: isFolder() ? '#dcb67a' : '#858585'
           }}
         >
-          {isFolder ?
+          <Show when={isFolder()} fallback={<File size={14} strokeWidth={1.5} />}>
             <Folder size={14} fill="#dcb67a" strokeWidth={1} />
-          : <File size={14} strokeWidth={1.5} />}
+          </Show>
         </span>
 
-        {isEditing ?
+        <Show when={isEditing()} fallback={<span style={{ flex: 1 }}>{props.node.name}</span>}>
           <input
             ref={inputRef}
             type="text"
-            value={editValue}
-            onChange={e => setEditValue(e.target.value)}
-            onBlur={() => onRenameSubmit(node.id, editValue)}
+            value={editValue()}
+            onInput={e => setEditValue(e.currentTarget.value)}
+            onBlur={() => props.onRenameSubmit(props.node.id, editValue())}
             onKeyDown={handleKeyDown}
             onClick={e => e.stopPropagation()}
-            className="file-rename-input"
+            class="file-rename-input"
             style={{
               background: '#3c3c3c',
               border: '1px solid #007fd4',
               color: 'white',
               outline: 'none',
               padding: '1px 4px',
-              fontSize: 'inherit',
+              'font-size': 'inherit',
               width: '100%'
             }}
           />
-        : <span style={{ flex: 1 }}>{node.name}</span>}
+        </Show>
 
-        {isFolder && isHovered && !isEditing && (
+        <Show when={isFolder() && isHovered() && !isEditing()}>
           <span
             onClick={handleCreateClick}
             style={{
               display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
+              'align-items': 'center',
+              'justify-content': 'center',
               width: '20px',
               height: '20px',
               cursor: 'pointer',
               color: '#cccccc',
-              marginRight: '4px'
+              'margin-right': '4px'
             }}
             title="New File"
           >
             <Plus size={14} />
           </span>
-        )}
+        </Show>
       </div>
 
-      {isFolder && isOpen && node.children && (
+      <Show when={isFolder() && isOpen() && props.node.children}>
         <div>
-          {node.children.map(child => (
-            <TreeItem
-              key={child.id}
-              node={child}
-              onFileSelect={onFileSelect}
-              selectedFileId={selectedFileId}
-              level={level + 1}
-              onContextMenu={onContextMenu}
-              editingId={editingId}
-              onRenameSubmit={onRenameSubmit}
-              onCreateFile={onCreateFile}
-              onDragStart={onDragStart}
-              onDragOver={onDragOver}
-              onDrop={onDrop}
-            />
-          ))}
+          <For each={props.node.children}>
+            {child => (
+              <TreeItem
+                node={child}
+                onFileSelect={props.onFileSelect}
+                selectedFileId={props.selectedFileId}
+                level={level() + 1}
+                onContextMenu={props.onContextMenu}
+                editingId={props.editingId}
+                onRenameSubmit={props.onRenameSubmit}
+                onCreateFile={props.onCreateFile}
+                onDragStart={props.onDragStart}
+                onDragOver={props.onDragOver}
+                onDrop={props.onDrop}
+              />
+            )}
+          </For>
         </div>
-      )}
+      </Show>
     </div>
-  );
-};
+  )
+}
 
-export function FileTree({ nodes, onFileSelect, selectedFileId }: FileTreeProps) {
-  const { renameNode, deleteNode, createFile, moveNode } = useIDE();
-  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; nodeId: string } | null>(null);
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [draggedNode, setDraggedNode] = useState<FileNode | null>(null);
+export function FileTree(props: FileTreeProps) {
+  const ide = useIDEStore()
+  const [contextMenu, setContextMenu] = createSignal<{ x: number; y: number; nodeId: string } | null>(null)
+  const [editingId, setEditingId] = createSignal<string | null>(null)
+  const [draggedNode, setDraggedNode] = createSignal<FileNode | null>(null)
 
-  useEffect(() => {
-    const handleClickOutside = () => setContextMenu(null);
-    window.addEventListener('click', handleClickOutside);
-    return () => window.removeEventListener('click', handleClickOutside);
-  }, []);
+  const handleClickOutside = () => setContextMenu(null)
 
-  const handleContextMenu = (e: React.MouseEvent, nodeId: string) => {
-    setContextMenu({ x: e.clientX, y: e.clientY, nodeId });
-  };
+  onCleanup(() => window.removeEventListener('click', handleClickOutside))
+
+  const handleContextMenu = (e: MouseEvent, nodeId: string) => {
+    setContextMenu({ x: e.clientX, y: e.clientY, nodeId })
+  }
 
   const handleRenameSubmit = (id: string, newName: string) => {
     if (newName && newName.trim() !== '') {
-      renameNode(id, newName);
+      ide().renameNode(id, newName)
     }
-    setEditingId(null);
-  };
+    setEditingId(null)
+  }
 
   const handleDelete = () => {
-    if (contextMenu?.nodeId) {
+    const menu = contextMenu()
+    if (menu?.nodeId) {
       if (confirm('Delete this item?')) {
-        deleteNode(contextMenu.nodeId);
+        ide().deleteNode(menu.nodeId)
       }
     }
-  };
+  }
 
   const handleStartRename = () => {
-    if (contextMenu?.nodeId) {
-      setEditingId(contextMenu.nodeId);
-      setContextMenu(null); // Close menu
+    const menu = contextMenu()
+    if (menu?.nodeId) {
+      setEditingId(menu.nodeId)
+      setContextMenu(null)
     }
-  };
+  }
 
   const handleCreateFile = async (parentId: string) => {
-    const name = prompt('Enter file name:');
+    const name = prompt('Enter file name:')
     if (name) {
-      await createFile(name, 'file', parentId);
+      await ide().createFile(name, 'file', parentId)
     }
-  };
+  }
 
-  const onDragStart = (e: React.DragEvent, node: FileNode) => {
-    setDraggedNode(node);
-    e.dataTransfer.effectAllowed = 'move';
-    // Optional: set drag image
-  };
-
-  const onDragOver = (e: React.DragEvent, node: FileNode) => {
-    // Only allow drop if target is a folder and not the dragged node itself or its descendant
-    if (node.type === 'folder' && draggedNode && draggedNode.id !== node.id) {
-      e.preventDefault(); // Allow drop
-      e.dataTransfer.dropEffect = 'move';
+  const onDragStart = (e: DragEvent, node: FileNode) => {
+    setDraggedNode(node)
+    if (e.dataTransfer) {
+      e.dataTransfer.effectAllowed = 'move'
     }
-  };
+  }
 
-  const onDrop = (_: React.DragEvent, targetNode: FileNode) => {
-    if (draggedNode && targetNode.type === 'folder' && draggedNode.id !== targetNode.id) {
-      // Check for circular dependency (dropping parent into child)
-      // Simplified check: we can't easily check all descendants here without tree traversal helper,
-      // but basic self-drop is prevented.
-      // Ideally we check if targetNode is a descendant of draggedNode.
+  const onDragOver = (e: DragEvent, node: FileNode) => {
+    const dragged = draggedNode()
 
-      moveNode(draggedNode.id, targetNode.id);
-      setDraggedNode(null);
+    if (node.type === 'folder' && dragged && dragged.id !== node.id) {
+      e.preventDefault()
+      if (e.dataTransfer) {
+        e.dataTransfer.dropEffect = 'move'
+      }
     }
-  };
+  }
 
-  // Handle drop on root (sidebar background)
-  const onRootDrop = (e: React.DragEvent) => {
-    e.preventDefault();
-    if (draggedNode) {
-      moveNode(draggedNode.id, null); // Move to root
-      setDraggedNode(null);
+  const onDrop = (_: DragEvent, targetNode: FileNode) => {
+    const dragged = draggedNode()
+    if (dragged && targetNode.type === 'folder' && dragged.id !== targetNode.id) {
+      ide().moveNode(dragged.id, targetNode.id)
+      setDraggedNode(null)
     }
-  };
+  }
 
-  const onRootDragOver = (e: React.DragEvent) => {
-    e.preventDefault();
-    e.dataTransfer.dropEffect = 'move';
-  };
+  const onRootDrop = (e: DragEvent) => {
+    e.preventDefault()
+    const dragged = draggedNode()
+    if (dragged) {
+      ide().moveNode(dragged.id, null)
+      setDraggedNode(null)
+    }
+  }
+
+  const onRootDragOver = (e: DragEvent) => {
+    e.preventDefault()
+    if (e.dataTransfer) {
+      e.dataTransfer.dropEffect = 'move'
+    }
+  }
 
   return (
-    <div
-      className="sidebar"
-      style={{ position: 'relative', height: '100%' }}
-      onDragOver={onRootDragOver}
-      onDrop={onRootDrop}
-    >
-      <div className="file-tree-title">Explorer</div>
-      <div className="file-tree-container">
-        {nodes.map(node => (
+    <div onDragOver={onRootDragOver} onDrop={onRootDrop}>
+      <div class="file-tree-title">Explorer</div>
+      <For each={props.nodes}>
+        {node => (
           <TreeItem
-            key={node.id}
             node={node}
-            onFileSelect={onFileSelect}
-            selectedFileId={selectedFileId}
+            onFileSelect={props.onFileSelect}
+            selectedFileId={props.selectedFileId}
             onContextMenu={handleContextMenu}
-            editingId={editingId}
+            editingId={editingId()}
             onRenameSubmit={handleRenameSubmit}
             onCreateFile={handleCreateFile}
             onDragStart={onDragStart}
             onDragOver={onDragOver}
             onDrop={onDrop}
           />
-        ))}
-      </div>
+        )}
+      </For>
 
-      {contextMenu && (
-        <div
-          className="context-menu"
-          style={{
-            position: 'fixed',
-            top: contextMenu.y,
-            left: contextMenu.x,
-            backgroundColor: '#252526',
-            border: '1px solid #454545',
-            borderRadius: '4px',
-            padding: '4px 0',
-            zIndex: 1000,
-            boxShadow: '0 2px 8px rgba(0,0,0,0.5)'
-          }}
-        >
+      <Show when={contextMenu()}>
+        {menu => (
           <div
-            className="context-menu-item"
-            onClick={handleStartRename}
+            class="context-menu"
             style={{
-              padding: '6px 12px',
-              cursor: 'pointer',
-              fontSize: '13px',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-              color: '#cccccc',
-              userSelect: 'none'
+              position: 'fixed',
+              top: `${menu().y}px`,
+              left: `${menu().x}px`,
+              'background-color': '#252526',
+              border: '1px solid #454545',
+              'border-radius': '4px',
+              padding: '4px 0',
+              'z-index': 1000,
+              'box-shadow': '0 2px 8px rgba(0,0,0,0.5)'
             }}
-            onMouseEnter={e => (e.currentTarget.style.backgroundColor = '#094771')}
-            onMouseLeave={e => (e.currentTarget.style.backgroundColor = 'transparent')}
           >
-            <Edit2 size={14} /> Rename
+            <div
+              class="context-menu-item"
+              onClick={handleStartRename}
+              style={{
+                padding: '6px 12px',
+                cursor: 'pointer',
+                'font-size': '13px',
+                display: 'flex',
+                'align-items': 'center',
+                gap: '8px',
+                color: '#cccccc',
+                'user-select': 'none'
+              }}
+              onMouseEnter={e => (e.currentTarget.style.backgroundColor = '#094771')}
+              onMouseLeave={e => (e.currentTarget.style.backgroundColor = 'transparent')}
+            >
+              <Edit2 size={14} /> Rename
+            </div>
+            <div
+              class="context-menu-item"
+              onClick={handleDelete}
+              style={{
+                padding: '6px 12px',
+                cursor: 'pointer',
+                'font-size': '13px',
+                display: 'flex',
+                'align-items': 'center',
+                gap: '8px',
+                color: '#ff6b6b',
+                'user-select': 'none'
+              }}
+              onMouseEnter={e => (e.currentTarget.style.backgroundColor = '#094771')}
+              onMouseLeave={e => (e.currentTarget.style.backgroundColor = 'transparent')}
+            >
+              <Trash2 size={14} /> Delete
+            </div>
           </div>
-          <div
-            className="context-menu-item"
-            onClick={handleDelete}
-            style={{
-              padding: '6px 12px',
-              cursor: 'pointer',
-              fontSize: '13px',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-              color: '#ff6b6b',
-              userSelect: 'none'
-            }}
-            onMouseEnter={e => (e.currentTarget.style.backgroundColor = '#094771')}
-            onMouseLeave={e => (e.currentTarget.style.backgroundColor = 'transparent')}
-          >
-            <Trash2 size={14} /> Delete
-          </div>
-        </div>
-      )}
+        )}
+      </Show>
     </div>
-  );
+  )
 }

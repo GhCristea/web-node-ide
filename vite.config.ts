@@ -1,15 +1,10 @@
-import { defineConfig } from 'vite';
-import react from '@vitejs/plugin-react';
+import { defineConfig } from 'vite'
+import solid from 'vite-plugin-solid'
 
 export default defineConfig({
-  plugins: [react()],
+  plugins: [solid()],
   server: {
-    headers: {
-      'Cross-Origin-Opener-Policy': 'same-origin',
-      'Cross-Origin-Embedder-Policy': 'require-corp'
-    }
+    headers: { 'Cross-Origin-Opener-Policy': 'same-origin', 'Cross-Origin-Embedder-Policy': 'require-corp' }
   },
-  optimizeDeps: {
-    exclude: ['@sqlite.org/sqlite-wasm']
-  }
-});
+  optimizeDeps: { exclude: ['@sqlite.org/sqlite-wasm'] }
+})

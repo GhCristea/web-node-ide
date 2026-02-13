@@ -12,23 +12,24 @@ A browser-based Node.js IDE that allows you to write, run, and execute Node.js c
 
 ## Architecture
 
-This project uses a **Service Layer Pattern** to decouple business logic from the React UI:
+This project uses a **Service Layer Pattern** to decouple business logic from the SolidJS UI:
 
-- **UI Layer (`IDEStore`)**: Manages view state (selected file, loading flags) and connects components to the service.
+- **UI Layer (`IDEStore`)**: Manages view state (selected file, loading flags) using Zustand and connects components to the service.
 - **Service Layer (`ideService`)**: Orchestrates file operations, database sync, and WebContainer execution.
 - **Infrastructure (`db`, `webContainer`)**: Handles low-level persistence and runtime environments.
 
 ## Technologies
 
-- **Core**: React 19, TypeScript, Vite
+- **Core**: SolidJS, TypeScript, Vite
 - **Runtime**: @webcontainer/api
 - **Storage**: @sqlite.org/sqlite-wasm (OPFS)
-- **Editor**: @monaco-editor/react
+- **Editor**: solid-monaco
 - **Terminal**: @xterm/xterm
 
 ## Setup & Running
 
 1. **Clone & Install**
+
    ```bash
    git clone https://github.com/GhCristea/web-node-ide
    cd web-node-ide
@@ -36,9 +37,11 @@ This project uses a **Service Layer Pattern** to decouple business logic from th
    ```
 
 2. **Run Development Server**
+
    ```bash
    npm run dev
    ```
+
    *Note: Must be served over HTTPS or localhost due to `SharedArrayBuffer` security requirements.*
 
 ## Usage

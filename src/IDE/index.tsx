@@ -1,118 +1,116 @@
-import '@xterm/xterm/css/xterm.css';
-import { Panel, Group, Separator } from 'react-resizable-panels';
-import { Play, Save } from 'lucide-react';
-import { Editor } from '@monaco-editor/react';
-import { TerminalComponent } from './TerminalComponent';
-import { FileTree } from './FileTree';
-import { useCallback, useEffect } from 'react';
+import { onMount, onCleanup, Show } from 'solid-js'
+import { PanelGroup, Panel, ResizeHandle } from 'solid-resizable-panels'
+import { Play, Save } from 'lucide-solid'
+import { MonacoEditor } from 'solid-monaco'
+import { TerminalComponent } from './TerminalComponent'
+import { showToast } from '../toasts/toastStore'
+import { useIDEStore } from './IDEStore'
 
-import { useToast } from '../toasts/useToast';
-import { useIDE } from './useIDE';
+import 'solid-resizable-panels/styles.css'
+import { FileTree } from './FileTree'
+
+type MonacoOptions = Pick<
+  Required<Pick<Parameters<typeof MonacoEditor>[0], 'options'>>['options'],
+  'fontFamily' | 'fontWeight' | 'fontSize' | 'fontVariations' | 'fontLigatures' | 'theme'
+>
 
 export function IDE() {
-  const {
-    files,
-    selectedFileId,
-    selectFile,
-    fileContent,
-    updateFileContent,
-    saveFile,
-    createFile,
-    run,
-    reset,
-    terminalRef,
-    isRunning,
-    isReady
-  } = useIDE();
+  const ide = useIDEStore()
 
-  const { showToast } = useToast();
+  const options: MonacoOptions = {
+    fontFamily: 'Fira Code',
+    fontWeight: 'normal',
+    fontSize: 14,
+    fontVariations: 'normal',
+    fontLigatures: true,
+    theme: 'vs-dark'
+  }
 
-  const handleSave = useCallback(async () => {
-    await saveFile();
-    showToast('File saved', 'success');
-  }, [saveFile, showToast]);
+  const handleSave = async () => {
+    await ide().saveFile()
+    showToast('File saved', 'success')
+  }
 
   const handleCreate = async (type: 'file' | 'folder') => {
-    const name = prompt(`Enter ${type} name:`);
+    const name = prompt(`Enter ${type} name:`)
     if (name) {
-      await createFile(name, type);
+      await ide().createFile(name, type, null)
     }
-  };
+  }
 
-  useEffect(() => {
+  onMount(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === 's') {
-        e.preventDefault();
-        handleSave();
+        e.preventDefault()
+        handleSave()
       }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [handleSave]);
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    onCleanup(() => window.removeEventListener('keydown', handleKeyDown))
+
+    ide().initialize()
+  })
 
   return (
-    <div className="ide-container">
-      <header className="header">
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <span>⚡ Web IDE {isReady ? '(Ready)' : '(Loading...)'}</span>
-          <button onClick={run} disabled={isRunning || !selectedFileId}>
-            <Play size={14} /> Run
-          </button>
-          <button onClick={handleSave} disabled={!selectedFileId}>
-            <Save size={14} /> Save
-          </button>
-          <button onClick={() => handleCreate('file')}>+ File</button>
-          <button onClick={() => handleCreate('folder')}>+ Folder</button>
-          <button onClick={reset} style={{ marginLeft: '10px', color: 'red' }}>
-            Reset
-          </button>
-        </div>
+    <div class="ide-container">
+      <header class="header">
+        <span>⚡ Web IDE {ide().isDbReady ? '(Ready)' : '(Loading...)'}</span>
+        <button
+          onClick={async () => {
+            await ide().saveFile()
+            ide().run()
+          }}
+          disabled={ide().isRunning || !ide().selectedFileId}
+        >
+          <Play size={14} /> Run
+        </button>
+        <button onClick={handleSave} disabled={!ide().selectedFileId}>
+          <Save size={14} /> Save
+        </button>
+        <button onClick={() => handleCreate('file')}>+ File</button>
+        <button onClick={() => handleCreate('folder')}>+ Folder</button>
+        <button onClick={() => ide().reset()} style={{ 'margin-left': '10px', color: 'red' }}>
+          Reset
+        </button>
       </header>
 
-      <Group orientation="horizontal">
-        <Panel defaultSize={200}>
-          <FileTree
-            nodes={files}
-            onFileSelect={selectFile}
-            selectedFileId={selectedFileId}
-          />
-        </Panel>
+      <PanelGroup direction="column" class="full">
+        <Panel id="top-section" class="flex">
+          <PanelGroup direction="row" class="grow-1">
+            <Panel id="file-tree" initialSize={25} collapsible>
+              <FileTree
+                nodes={ide().files}
+                onFileSelect={ide().selectFile}
+                selectedFileId={ide().selectedFileId}
+              />
+            </Panel>
 
-        <Separator className="resize-handle vertical" />
+            <ResizeHandle />
 
-        <Panel>
-          <Group orientation="vertical">
-            <Panel defaultSize={70} minSize={30}>
-              {selectedFileId ?
-                <Editor
+            <Panel id="editor">
+              <Show
+                when={ide().selectedFileId}
+                fallback={<div class="flex flex-center full">Select a file to edit</div>}
+              >
+                <MonacoEditor
                   height="100%"
+                  width="100%"
                   language="javascript"
-                  theme="vs-dark"
-                  value={fileContent}
-                  onChange={(value) => updateFileContent(value || '')}
+                  options={options}
+                  value={ide().fileContent}
+                  onChange={v => ide().updateFileContent(v)}
                 />
-              : <div
-                  style={{
-                    height: '100%',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    color: '#666'
-                  }}
-                >
-                  Select a file to edit
-                </div>
-              }
+              </Show>
             </Panel>
-
-            <Separator className="resize-handle horizontal" />
-
-            <Panel defaultSize={20}>
-              <TerminalComponent ref={terminalRef} />
-            </Panel>
-          </Group>
+          </PanelGroup>
         </Panel>
-      </Group>
+
+        <ResizeHandle />
+
+        <Panel id="terminal-panel" initialSize={25} collapsible>
+          <TerminalComponent ref={ide().setTerminal} />
+        </Panel>
+      </PanelGroup>
     </div>
-  );
+  )
 }

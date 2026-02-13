@@ -6,13 +6,13 @@ This application simulates a full IDE environment in the browser and does **not*
 
 ## Layers
 
-### 1. UI Layer (React)
+### 1. UI Layer (SolidJS)
 
-- **Location**: `src/IDE/IDEStore.tsx` (Provider) and `src/IDE/IDEContext.ts` (Context).
+- **Location**: `src/IDE/IDEStore.ts` (Zustand Store) and `src/IDE/useIDE.ts` (SolidJS integration).
 - **Responsibilities**:
   - Holds view state (selected file id, loading/running flags, errors).
   - Triggers service actions and refreshes the file tree when needed.
-  - Renders editor/terminal/file tree via components (not described here).
+  - Renders editor/terminal/file tree via SolidJS components.
 
 ### 2. Service Layer (Orchestration)
 

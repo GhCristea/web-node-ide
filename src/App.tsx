@@ -1,14 +1,12 @@
-import { IDE } from './IDE';
-import { ToastProvider } from './toasts/ToastContext';
-import './App.css';
-import { IDEProvider } from './IDE/IDEStore';
+import { IDE } from './IDE'
+import { ToastContainer } from './toasts/ToastContainer'
+import './App.css'
 
 export default function App() {
   return (
-    <ToastProvider>
-      <IDEProvider>
-        <IDE />
-      </IDEProvider>
-    </ToastProvider>
-  );
+    <>
+      <IDE />
+      <ToastContainer />
+    </>
+  )
 }
