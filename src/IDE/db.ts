@@ -89,10 +89,11 @@ export async function createFile(
   name: string,
   parentId: string | null,
   type: 'file' | 'folder',
-  content: string = ''
+  content: string = '',
+  explicitId?: string
 ) {
   const promiser = await initDb()
-  const id = crypto.randomUUID()
+  const id = explicitId || crypto.randomUUID()
   try {
     await promiser('exec', {
       sql: 'INSERT INTO files (id, name, parentId, type, content) VALUES (?, ?, ?, ?, ?)',

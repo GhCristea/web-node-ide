@@ -1,9 +1,6 @@
-import type { DirectoryNode, SymlinkNode, FileNode as WebContainerFileNode } from '@webcontainer/api'
+import type { FileSystemTree } from '@webcontainer/api'
 import type { FileNode, FileRecord, FileMetadata } from '../../types/fileSystem'
 
-export interface FileSystemTree {
-  [name: string]: DirectoryNode | WebContainerFileNode | SymlinkNode
-}
 export function buildTree(files: FileMetadata[]): FileNode[] {
   const nodeMap = new Map<string, FileNode>()
   const roots: FileNode[] = []

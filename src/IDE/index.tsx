@@ -69,6 +69,9 @@ export function IDE() {
         </button>
         <button onClick={() => handleCreate('file')}>+ File</button>
         <button onClick={() => handleCreate('folder')}>+ Folder</button>
+        <button onClick={async () => await ide().mountFromLocal()} disabled={!ide().isWcReady}>
+          📂 Open
+        </button>
         <button onClick={() => ide().reset()} style={{ 'margin-left': '10px', color: 'red' }}>
           Reset
         </button>

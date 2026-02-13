@@ -1,5 +1,6 @@
 import type { WebContainer } from '@webcontainer/api'
 import { buildTree, buildWebContainerTree, generatePaths } from './fileUtils'
+import { fileSystemBridge } from './fileSystemBridge'
 import type { IDEDependencies } from './types'
 import type { FileMetadata } from '../../types/fileSystem'
 
@@ -90,7 +91,14 @@ export function createIDEService(deps: IDEDependencies) {
       isWcReady: boolean,
       writeFile: (path: string, content: string) => Promise<void>
     ) {
-      await deps.db.saveFileContent(id, content)
+      try {
+        await Promise.all([
+          deps.db.saveFileContent(id, content),
+          fileSystemBridge.saveFile(id, content)
+        ])
+      } catch {
+        console.log('Failed to save file', id)
+      }
 
       if (isWcReady) {
         const path = getPathFromCache(id)
@@ -209,6 +217,59 @@ export function createIDEService(deps: IDEDependencies) {
         deps.terminal.write(`\r\n\x1b[1;33mProcess exited with code ${exitCode}\x1b[0m\r\n`)
       } catch (err) {
         deps.terminal.write(`\x1b[1;31mError: ${err}\x1b[0m\r\n`)
+      }
+    },
+
+    async mountFromLocal(webContainer: WebContainer) {
+      try {
+        const handle = await fileSystemBridge.openDirectory()
+        await fileSystemBridge.storeHandle(handle)
+
+        const { files, contents } = await fileSystemBridge.readDirectory(handle)
+
+        await deps.db.resetFileSystem()
+
+        for (const file of files) {
+          const content = file.type === 'file' ? contents[file.id] || '' : ''
+          await deps.db.createFile(file.name, file.parentId, file.type, content, file.id)
+        }
+
+        _filesCache = await deps.db.getFilesMetadata()
+        const treeRoots = buildTree(_filesCache)
+
+        await this.mountProjectFiles(webContainer)
+
+        return treeRoots
+      } catch (error) {
+        if ((error as Error).name === 'AbortError') return null
+        console.error('Failed to mount from local:', error)
+        throw error
+      }
+    },
+
+    async restoreLocalSession(webContainer: WebContainer) {
+      const handle = await fileSystemBridge.getHandle()
+      if (!handle) return false
+
+      const hasPerm = await fileSystemBridge.verifyPermission(handle, 'readwrite')
+      if (!hasPerm) return false
+
+      try {
+        const { files, contents } = await fileSystemBridge.readDirectory(handle)
+
+        await deps.db.resetFileSystem()
+
+        for (const file of files) {
+          const content = file.type === 'file' ? contents[file.id] || '' : ''
+          await deps.db.createFile(file.name, file.parentId, file.type, content, file.id)
+        }
+
+        _filesCache = await deps.db.getFilesMetadata()
+        await this.mountProjectFiles(webContainer)
+        return buildTree(_filesCache)
+      } catch (e) {
+        console.error('Failed to restore session:', e)
+        return false
       }
     }
   }

@@ -25,6 +25,7 @@ export interface IDEState {
   renameNode: (id: string, newName: string) => Promise<void>
   moveNode: (id: string, newParentId: string | null) => Promise<void>
   deleteNode: (id: string) => Promise<void>
+  mountFromLocal: () => Promise<void>
   run: () => Promise<void>
   reset: () => Promise<void>
 }
@@ -97,7 +98,7 @@ export const useIDEStore = createWithSignal<IDEState>((set, get) => {
       if (!selectedFileId) return
 
       try {
-        await service.saveFile(selectedFileId, fileContent, isWcReady, async (path, content) => {
+        await service.saveFile(selectedFileId, fileContent, isWcReady, async (path: string, content: string) => {
           if (webContainer) await webContainer.fs.writeFile(path, content)
         })
       } catch (err) {
@@ -155,6 +156,24 @@ export const useIDEStore = createWithSignal<IDEState>((set, get) => {
       } catch (err) {
         console.error(err)
         set({ error: 'Failed to delete' })
+      }
+    },
+
+    mountFromLocal: async () => {
+      try {
+        const { webContainer } = get()
+        if (!webContainer) return
+
+        set({ isLoading: true })
+        const tree = await service.mountFromLocal(webContainer)
+        if (tree) {
+          set({ files: tree })
+          get().terminal?.write('\x1b[32m✓ Mounted local directory\x1b[0m\r\n')
+        }
+      } catch (err) {
+        set({ error: `Mount failed: ${err}` })
+      } finally {
+        set({ isLoading: false })
       }
     },
 
