@@ -55,27 +55,36 @@ export const useIDEStore = createWithSignal<IDEState>((set, get) => {
 
     initialize: async () => {
       try {
-        await db.initDb()
-        set({ isDbReady: true })
+        const dbPromise = db.initDb().then(() => {
+          set({ isDbReady: true })
+        })
 
-        try {
-          const wc = await WebContainer.boot()
-          set({ webContainer: wc, isWcReady: true })
-          get().terminal?.write('\x1b[32m✓ Node.js Environment Ready\x1b[0m\r\n')
-        } catch (e) {
-          set({ error: String(e) })
+        const wcPromise = WebContainer.boot()
+          .then(wc => {
+            set({ webContainer: wc, isWcReady: true })
+            get().terminal?.write('\x1b[32m✓ Node.js Environment Ready\x1b[0m\r\n')
+          })
+          .catch(e => {
+            set({ error: String(e) })
+          })
+
+        await Promise.all([dbPromise, wcPromise])
+
+        if (get().isDbReady) {
+          try {
+            const tree = await service.loadFiles()
+            set({ files: tree, isLoading: false })
+
+            const wc = get().webContainer
+            if (wc) {
+              await service.mountProjectFiles(wc)
+            }
+          } catch (fileErr) {
+            set({ error: `File Load Failed: ${fileErr}`, isLoading: false })
+          }
         }
-
-        const tree = await service.loadFiles()
-
-        const wc = get().webContainer
-        if (wc) {
-          await service.mountProjectFiles(wc)
-        }
-
-        set({ files: tree, isLoading: false })
       } catch (err) {
-        set({ error: `DB Init Failed: ${err}`, isLoading: false })
+        set({ error: `Initialization Failed: ${err}`, isLoading: false })
       }
     },
 
