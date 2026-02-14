@@ -39,6 +39,10 @@ export const useIDEStore = createWithSignal<IDEState>((set, get) => {
 
   const service = createIDEService({ db, terminal: terminalProxy })
 
+  const onTreeUpdate = (tree: FileNode[]) => {
+    set({ files: tree })
+  }
+
   return {
     files: [],
     selectedFileId: null,
@@ -77,7 +81,7 @@ export const useIDEStore = createWithSignal<IDEState>((set, get) => {
 
             const wc = get().webContainer
             if (wc) {
-              await service.mountProjectFiles(wc)
+              await service.mountProjectFiles(wc, onTreeUpdate)
             }
           } catch (fileErr) {
             set({ error: `File Load Failed: ${fileErr}`, isLoading: false })
@@ -120,10 +124,6 @@ export const useIDEStore = createWithSignal<IDEState>((set, get) => {
       try {
         const { selectedFileId, webContainer } = get()
         await service.createNode(name, type, selectedFileId, explicitParentId, webContainer)
-
-        const tree = await service.loadFiles()
-
-        set({ files: tree })
       } catch (err) {
         set({ error: `Failed to create ${type}: ${err}` })
       }
@@ -133,8 +133,6 @@ export const useIDEStore = createWithSignal<IDEState>((set, get) => {
       try {
         const { webContainer } = get()
         await service.renameNode(id, newName, webContainer)
-        const tree = await service.loadFiles()
-        set({ files: tree })
       } catch (err) {
         console.error(err)
         set({ error: 'Failed to rename' })
@@ -145,8 +143,6 @@ export const useIDEStore = createWithSignal<IDEState>((set, get) => {
       try {
         const { webContainer } = get()
         await service.moveNode(id, newParentId, webContainer)
-        const tree = await service.loadFiles()
-        set({ files: tree })
       } catch (err) {
         console.error(err)
         set({ error: 'Failed to move' })
@@ -160,8 +156,6 @@ export const useIDEStore = createWithSignal<IDEState>((set, get) => {
         if (selectedFileId === id) {
           set({ selectedFileId: null })
         }
-        const tree = await service.loadFiles()
-        set({ files: tree })
       } catch (err) {
         console.error(err)
         set({ error: 'Failed to delete' })
@@ -174,7 +168,7 @@ export const useIDEStore = createWithSignal<IDEState>((set, get) => {
         if (!webContainer) return
 
         set({ isLoading: true })
-        const tree = await service.mountFromLocal(webContainer)
+        const tree = await service.mountFromLocal(webContainer, onTreeUpdate)
         if (tree) {
           set({ files: tree })
           get().terminal?.write('\x1b[32m✓ Mounted local directory\x1b[0m\r\n')

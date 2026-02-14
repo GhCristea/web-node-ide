@@ -15,7 +15,7 @@ export const useToastStore = () => {
 }
 
 export function showToast(message: string, type: ToastType = 'info') {
-  const id = Math.random().toString(36).substr(2, 9)
+  const id = Math.random().toString(36).slice(2, 9)
   setToasts(prev => [...prev, { id, message, type }])
 
   setTimeout(() => {
