@@ -1,12 +1,8 @@
 import { get, set } from 'idb-keyval'
 import type { FileMetadata, Id, ParentId, Content } from '../types'
 
-type FsFileHandle = FileSystemFileHandle
-type FsFolderHandle = FileSystemDirectoryHandle
-type FsEntryHandle = FsFileHandle | FsFolderHandle
-
-const fileHandles = new Map<Id, FsFileHandle>()
-const folderHandles = new Map<Id, FsFolderHandle>()
+const fileHandles = new Map<Id, FileSystemFileHandle>()
+const folderHandles = new Map<Id, FileSystemDirectoryHandle>()
 
 const generateId = () => crypto.randomUUID()
 
@@ -16,21 +12,20 @@ export const fileSystemBridge = {
     return handle
   },
 
-  async readDirectory(rootHandle: FsFolderHandle) {
+  async readDirectory(rootHandle: FileSystemDirectoryHandle) {
     fileHandles.clear()
     folderHandles.clear()
 
     const files: FileMetadata[] = []
     const contents: Record<Id, Content> = {}
 
-    const processEntry = async <T extends FsEntryHandle>(entry: T, parentId: ParentId) => {
+    const processEntry = async <T extends FileSystemHandleUnion>(entry: T, parentId: ParentId) => {
       const id = generateId()
-      const isFile = entry.kind === 'file'
       const name = entry.name
 
-      files.push({ id, name, parentId, type: isFile ? 'file' : 'directory', updated_at: new Date().toISOString() })
+      files.push({ id, name, parentId, type: entry.kind, updated_at: new Date().toISOString() })
 
-      if (isFile) {
+      if (entry.kind === 'file') {
         fileHandles.set(id, entry)
 
         try {

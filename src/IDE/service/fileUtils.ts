@@ -1,5 +1,5 @@
 import type { FileSystemTree } from '@webcontainer/api'
-import type { FileNode, FileRecord, FileMetadata, Id } from '../types'
+import type { FileNode, FileMetadata, Id } from '../types'
 
 export function buildTree(files: FileMetadata[]) {
   const nodeMap = new Map<Id, FileNode>()
@@ -57,35 +57,6 @@ export function generatePaths(files: FileMetadata[]) {
   return idToPath
 }
 
-export function generateFilePaths(files: FileRecord[]) {
-  const fileMap = new Map<Id, FileRecord>(files.map(f => [f.id, f]))
-  const paths: Record<string, string> = {}
-
-  files.forEach(file => {
-    if (file.type === 'directory') return
-
-    let current: FileRecord | undefined = file
-    const pathParts: string[] = []
-
-    while (current) {
-      pathParts.unshift(current.name)
-      if (current.parentId) {
-        current = fileMap.get(current.parentId)
-      } else {
-        current = undefined
-      }
-    }
-
-    if (pathParts.length > 0) {
-      paths[pathParts.join('/')] = file.content || ''
-    }
-  })
-
-  return paths
-}
-
-export const isDir = (file: FileSystemTree[string]) => 'directory' in file
-
 export function buildWebContainerTree(filesMap: Record<string, string>) {
   const tree: FileSystemTree = {}
   Object.entries(filesMap).forEach(([filePath, content]) => {
@@ -107,7 +78,7 @@ export function buildWebContainerTree(filesMap: Record<string, string>) {
         node = subtree[pathPart]
       }
 
-      if (node && isDir(node)) {
+      if (node && 'directory' in node) {
         subtree = node.directory
       }
     }
