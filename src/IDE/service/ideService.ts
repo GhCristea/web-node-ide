@@ -1,13 +1,12 @@
 import type { WebContainer } from '@webcontainer/api'
 import { buildTree, buildWebContainerTree, generatePaths } from './fileUtils'
 import { fileSystemBridge } from './fileSystemBridge'
-import type { IDEDependencies } from './types'
-import type { FileMetadata } from '../../types/fileSystem'
+import type { FileMetadata, DB, TerminalHandle, FsKind, Id, ParentId, Content } from '../types'
 
-export function createIDEService(deps: IDEDependencies) {
+export function createIDEService(deps: { db: DB; terminal: TerminalHandle }) {
   let _filesCache: FileMetadata[] = []
 
-  const getPathFromCache = (fileId: string): string | null => {
+  const getPathFromCache = (fileId: Id) => {
     const file = _filesCache.find(f => f.id === fileId)
     if (!file) return null
 
@@ -22,10 +21,7 @@ export function createIDEService(deps: IDEDependencies) {
     return parts.join('/')
   }
 
-  const resolveParentId = (
-    selectedFileId: string | null,
-    explicitParentId?: string | null
-  ): string | null => {
+  const resolveParentId = (selectedFileId: Id | null, explicitParentId?: ParentId) => {
     if (explicitParentId !== undefined) {
       return explicitParentId
     }
@@ -33,7 +29,7 @@ export function createIDEService(deps: IDEDependencies) {
     if (selectedFileId) {
       const selectedNode = _filesCache.find(f => f.id === selectedFileId)
       if (selectedNode) {
-        return selectedNode.type === 'folder' ? selectedNode.id : selectedNode.parentId
+        return selectedNode.type === 'directory' ? selectedNode.id : selectedNode.parentId
       }
     }
     return null
@@ -54,7 +50,7 @@ export function createIDEService(deps: IDEDependencies) {
 
       const pathsMap = generatePaths(_filesCache)
       const validFiles = _filesCache.filter(f => {
-        if (f.type === 'folder') return false
+        if (f.type === 'directory') return false
         const path = pathsMap.get(f.id)
         return path && !path.split('/').includes('node_modules')
       })
@@ -81,21 +77,18 @@ export function createIDEService(deps: IDEDependencies) {
       console.log(`Mounted ${Object.keys(mountTree).length} files to WebContainer`)
     },
 
-    async getFileContent(id: string) {
+    async getFileContent(id: Id) {
       return deps.db.getFileContent(id)
     },
 
     async saveFile(
-      id: string,
-      content: string,
+      id: Id,
+      content: Content,
       isWcReady: boolean,
-      writeFile: (path: string, content: string) => Promise<void>
+      writeFile: (path: string, content: Content) => Promise<void>
     ) {
       try {
-        await Promise.all([
-          deps.db.saveFileContent(id, content),
-          fileSystemBridge.saveFile(id, content)
-        ])
+        await Promise.all([deps.db.saveFileContent(id, content), fileSystemBridge.saveFile(id, content)])
       } catch {
         console.log('Failed to save file', id)
       }
@@ -111,9 +104,9 @@ export function createIDEService(deps: IDEDependencies) {
 
     async createNode(
       name: string,
-      type: 'file' | 'folder',
-      selectedFileId: string | null,
-      explicitParentId?: string | null,
+      type: FsKind,
+      selectedFileId: Id | null,
+      explicitParentId?: ParentId,
       webContainer?: WebContainer | null
     ) {
       const parentId = resolveParentId(selectedFileId, explicitParentId)
@@ -128,7 +121,7 @@ export function createIDEService(deps: IDEDependencies) {
 
         const fullPath = parentPath ? `${parentPath}/${name}` : name
 
-        if (type === 'folder') {
+        if (type === 'directory') {
           await webContainer.fs.mkdir(fullPath)
         } else {
           await webContainer.fs.writeFile(fullPath, '')
@@ -137,7 +130,7 @@ export function createIDEService(deps: IDEDependencies) {
       return newId
     },
 
-    async deleteNode(id: string, webContainer?: WebContainer | null) {
+    async deleteNode(id: Id, webContainer?: WebContainer | null) {
       const path = getPathFromCache(id)
       await deps.db.deleteFile(id)
 
@@ -146,7 +139,7 @@ export function createIDEService(deps: IDEDependencies) {
       }
     },
 
-    async renameNode(id: string, newName: string, webContainer?: WebContainer | null) {
+    async renameNode(id: Id, newName: string, webContainer?: WebContainer | null) {
       const oldPath = getPathFromCache(id)
       await deps.db.renameFile(id, newName)
 
@@ -159,11 +152,7 @@ export function createIDEService(deps: IDEDependencies) {
       }
     },
 
-    async moveNode(
-      id: string,
-      newParentId: string | null,
-      webContainer?: WebContainer | null
-    ) {
+    async moveNode(id: Id, newParentId: ParentId, webContainer?: WebContainer | null) {
       const oldPath = getPathFromCache(id)
       await deps.db.moveFile(id, newParentId)
 
@@ -194,15 +183,13 @@ export function createIDEService(deps: IDEDependencies) {
       }
     },
 
-    async runFile(fileId: string, isWcReady: boolean, webContainer: WebContainer) {
+    async runFile(fileId: Id, isWcReady: boolean, webContainer: WebContainer) {
       if (!isWcReady || !webContainer) return
 
       const path = getPathFromCache(fileId)
       if (!path) return
 
-      deps.terminal.write(
-        `\r\n\x1b[1;36m➤ ${new Date().toUTCString()} Executing ${path}...\x1b[0m\r\n`
-      )
+      deps.terminal.write(`\r\n\x1b[1;36m➤ ${new Date().toUTCString()} Executing ${path}...\x1b[0m\r\n`)
 
       try {
         const process = await webContainer.spawn('node', [path])

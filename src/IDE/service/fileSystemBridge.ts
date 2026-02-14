@@ -1,9 +1,12 @@
 import { get, set } from 'idb-keyval'
-import type { FileMetadata } from '../../types/fileSystem'
+import type { FileMetadata, Id, ParentId, Content } from '../types'
 
-const fileHandles = new Map<string, FileSystemFileHandle>()
+type FsFileHandle = FileSystemFileHandle
+type FsFolderHandle = FileSystemDirectoryHandle
+type FsEntryHandle = FsFileHandle | FsFolderHandle
 
-const folderHandles = new Map<string, FileSystemDirectoryHandle>()
+const fileHandles = new Map<Id, FsFileHandle>()
+const folderHandles = new Map<Id, FsFolderHandle>()
 
 const generateId = () => crypto.randomUUID()
 
@@ -13,30 +16,19 @@ export const fileSystemBridge = {
     return handle
   },
 
-  async readDirectory(rootHandle: FileSystemDirectoryHandle) {
+  async readDirectory(rootHandle: FsFolderHandle) {
     fileHandles.clear()
     folderHandles.clear()
 
     const files: FileMetadata[] = []
-    const contents: Record<string, string> = {}
+    const contents: Record<Id, Content> = {}
 
-    const processEntry = async <T extends FileSystemDirectoryHandle | FileSystemFileHandle>(
-      entry: T,
-      parentId: string | null
-    ) => {
+    const processEntry = async <T extends FsEntryHandle>(entry: T, parentId: ParentId) => {
       const id = generateId()
       const isFile = entry.kind === 'file'
       const name = entry.name
 
-      const metadata: FileMetadata = {
-        id,
-        name,
-        parentId,
-        type: isFile ? 'file' : 'folder',
-        updated_at: new Date().toISOString()
-      }
-
-      files.push(metadata)
+      files.push({ id, name, parentId, type: isFile ? 'file' : 'directory', updated_at: new Date().toISOString() })
 
       if (isFile) {
         fileHandles.set(id, entry)
@@ -70,7 +62,7 @@ export const fileSystemBridge = {
     return { files, contents }
   },
 
-  async saveFile(id: string, content: string) {
+  async saveFile(id: Id, content: Content) {
     const handle = fileHandles.get(id)
     if (!handle) {
       console.warn(`No file handle found for ${id}. Skipping save to disk.`)

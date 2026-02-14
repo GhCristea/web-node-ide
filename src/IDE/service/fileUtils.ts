@@ -1,8 +1,8 @@
 import type { FileSystemTree } from '@webcontainer/api'
-import type { FileNode, FileRecord, FileMetadata } from '../../types/fileSystem'
+import type { FileNode, FileRecord, FileMetadata, Id } from '../types'
 
-export function buildTree(files: FileMetadata[]): FileNode[] {
-  const nodeMap = new Map<string, FileNode>()
+export function buildTree(files: FileMetadata[]) {
+  const nodeMap = new Map<Id, FileNode>()
   const roots: FileNode[] = []
 
   files.forEach(file => {
@@ -11,7 +11,7 @@ export function buildTree(files: FileMetadata[]): FileNode[] {
       name: file.name,
       parentId: file.parentId,
       type: file.type,
-      children: file.type === 'folder' ? [] : undefined
+      children: file.type === 'directory' ? [] : undefined
     })
   })
 
@@ -30,12 +30,12 @@ export function buildTree(files: FileMetadata[]): FileNode[] {
   return roots
 }
 
-export function generatePaths(files: FileMetadata[]): Map<string, string> {
-  const fileMap = new Map<string, FileMetadata>(files.map(f => [f.id, f]))
-  const idToPath = new Map<string, string>()
+export function generatePaths(files: FileMetadata[]) {
+  const fileMap = new Map<Id, FileMetadata>(files.map(f => [f.id, f]))
+  const idToPath = new Map<Id, string>()
 
   files.forEach(file => {
-    if (file.type === 'folder') return
+    if (file.type === 'directory') return
 
     let current: FileMetadata | undefined = file
     const pathParts: string[] = []
@@ -57,12 +57,12 @@ export function generatePaths(files: FileMetadata[]): Map<string, string> {
   return idToPath
 }
 
-export function generateFilePaths(files: FileRecord[]): Record<string, string> {
-  const fileMap = new Map<string, FileRecord>(files.map(f => [f.id, f]))
+export function generateFilePaths(files: FileRecord[]) {
+  const fileMap = new Map<Id, FileRecord>(files.map(f => [f.id, f]))
   const paths: Record<string, string> = {}
 
   files.forEach(file => {
-    if (file.type === 'folder') return
+    if (file.type === 'directory') return
 
     let current: FileRecord | undefined = file
     const pathParts: string[] = []

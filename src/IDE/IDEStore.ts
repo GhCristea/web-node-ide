@@ -1,30 +1,30 @@
 import { WebContainer } from '@webcontainer/api'
 import * as db from './db'
 import { createIDEService } from './service/ideService'
-import type { FileNode } from '../types/fileSystem'
+import type { Id, FileNode, FsKind, TerminalHandle, ParentId, Content } from './types'
 import { createWithSignal } from 'solid-zustand'
 
 export interface IDEState {
   files: FileNode[]
-  selectedFileId: string | null
-  fileContent: string
+  selectedFileId: Id | null
+  fileContent: Content
   isDbReady: boolean
   isRunning: boolean
   isLoading: boolean
   error: string | null
   webContainer: WebContainer | null
   isWcReady: boolean
-  terminal: { write: (data: string) => void } | null
+  terminal: TerminalHandle | null
 
-  setTerminal: (terminal: { write: (data: string) => void }) => void
+  setTerminal: (terminal: TerminalHandle) => void
   initialize: () => Promise<void>
-  selectFile: (id: string | null) => void
-  updateFileContent: (content: string) => void
+  selectFile: (id: Id | null) => void
+  updateFileContent: (content: Content) => void
   saveFile: () => Promise<void>
-  createFile: (name: string, type: 'file' | 'folder', parentId?: string | null) => Promise<void>
-  renameNode: (id: string, newName: string) => Promise<void>
-  moveNode: (id: string, newParentId: string | null) => Promise<void>
-  deleteNode: (id: string) => Promise<void>
+  createFile: (name: string, type: FsKind, parentId?: ParentId) => Promise<void>
+  renameNode: (id: Id, newName: string) => Promise<void>
+  moveNode: (id: Id, newParentId: ParentId) => Promise<void>
+  deleteNode: (id: Id) => Promise<void>
   mountFromLocal: () => Promise<void>
   run: () => Promise<void>
   reset: () => Promise<void>
@@ -79,7 +79,7 @@ export const useIDEStore = createWithSignal<IDEState>((set, get) => {
       }
     },
 
-    selectFile: async (id: string | null) => {
+    selectFile: async (id: Id | null) => {
       set({ selectedFileId: id })
       if (!id) {
         set({ fileContent: '' })
@@ -89,7 +89,7 @@ export const useIDEStore = createWithSignal<IDEState>((set, get) => {
       set({ fileContent: content })
     },
 
-    updateFileContent: (content: string) => {
+    updateFileContent: (content: Content) => {
       set({ fileContent: content })
     },
 
@@ -98,7 +98,7 @@ export const useIDEStore = createWithSignal<IDEState>((set, get) => {
       if (!selectedFileId) return
 
       try {
-        await service.saveFile(selectedFileId, fileContent, isWcReady, async (path: string, content: string) => {
+        await service.saveFile(selectedFileId, fileContent, isWcReady, async (path, content) => {
           if (webContainer) await webContainer.fs.writeFile(path, content)
         })
       } catch (err) {

@@ -1,34 +1,30 @@
 import { createSignal, createEffect, onCleanup, Show, For } from 'solid-js'
 import { ChevronDown, ChevronRight, File, Folder, Trash2, Edit2, Plus } from 'lucide-solid'
 import { useIDEStore } from './IDEStore'
-import type { FileNode } from '../types/fileSystem'
+import type { FileNode, Id, ParentId } from './types'
 
-interface FileTreeProps {
-  nodes: FileNode[]
-  onFileSelect: (id: string | null) => void
-  selectedFileId: string | null
-}
-
-const TreeItem = (props: {
+interface TreeItemProps {
   node: FileNode
-  onFileSelect: (id: string | null) => void
-  selectedFileId: string | null
+  onFileSelect: (id: Id | null) => void
+  selectedFileId: Id | null
   level?: number
-  onContextMenu: (e: MouseEvent, nodeId: string) => void
-  editingId: string | null
-  onRenameSubmit: (id: string, newName: string) => void
-  onCreateFile: (parentId: string) => void
+  onContextMenu: (e: MouseEvent, nodeId: Id) => void
+  editingId: Id | null
+  onRenameSubmit: (id: Id, newName: string) => void
+  onCreateFile: (parentId: ParentId) => void
   onDragStart: (e: DragEvent, node: FileNode) => void
   onDragOver: (e: DragEvent, node: FileNode) => void
   onDrop: (e: DragEvent, targetNode: FileNode) => void
-}) => {
+}
+
+const TreeItem = (props: TreeItemProps) => {
   const [isOpen, setIsOpen] = createSignal(false)
   const [editValue, setEditValue] = createSignal('')
   const [isHovered, setIsHovered] = createSignal(false)
   const [isDragOver, setIsDragOver] = createSignal(false)
   let inputRef: HTMLInputElement | undefined
 
-  const isFolder = () => props.node.type === 'folder'
+  const isFolder = () => props.node.type === 'directory'
   const isSelected = () => props.selectedFileId === props.node.id
   const isEditing = () => props.editingId === props.node.id
   const level = () => props.level || 0
@@ -209,21 +205,25 @@ const TreeItem = (props: {
   )
 }
 
+interface FileTreeProps extends Pick<TreeItemProps, 'selectedFileId' | 'onFileSelect'> {
+  nodes: TreeItemProps['node'][]
+}
+
 export function FileTree(props: FileTreeProps) {
   const ide = useIDEStore()
-  const [contextMenu, setContextMenu] = createSignal<{ x: number; y: number; nodeId: string } | null>(null)
-  const [editingId, setEditingId] = createSignal<string | null>(null)
+  const [contextMenu, setContextMenu] = createSignal<{ x: number; y: number; nodeId: Id } | null>(null)
+  const [editingId, setEditingId] = createSignal<Id | null>(null)
   const [draggedNode, setDraggedNode] = createSignal<FileNode | null>(null)
 
   const handleClickOutside = () => setContextMenu(null)
 
   onCleanup(() => window.removeEventListener('click', handleClickOutside))
 
-  const handleContextMenu = (e: MouseEvent, nodeId: string) => {
+  const handleContextMenu = (e: MouseEvent, nodeId: Id) => {
     setContextMenu({ x: e.clientX, y: e.clientY, nodeId })
   }
 
-  const handleRenameSubmit = (id: string, newName: string) => {
+  const handleRenameSubmit = (id: Id, newName: string) => {
     if (newName && newName.trim() !== '') {
       ide().renameNode(id, newName)
     }
@@ -247,7 +247,7 @@ export function FileTree(props: FileTreeProps) {
     }
   }
 
-  const handleCreateFile = async (parentId: string) => {
+  const handleCreateFile = async (parentId: ParentId) => {
     const name = prompt('Enter file name:')
     if (name) {
       await ide().createFile(name, 'file', parentId)
@@ -264,7 +264,7 @@ export function FileTree(props: FileTreeProps) {
   const onDragOver = (e: DragEvent, node: FileNode) => {
     const dragged = draggedNode()
 
-    if (node.type === 'folder' && dragged && dragged.id !== node.id) {
+    if (node.type === 'directory' && dragged && dragged.id !== node.id) {
       e.preventDefault()
       if (e.dataTransfer) {
         e.dataTransfer.dropEffect = 'move'
@@ -274,7 +274,7 @@ export function FileTree(props: FileTreeProps) {
 
   const onDrop = (_: DragEvent, targetNode: FileNode) => {
     const dragged = draggedNode()
-    if (dragged && targetNode.type === 'folder' && dragged.id !== targetNode.id) {
+    if (dragged && targetNode.type === 'directory' && dragged.id !== targetNode.id) {
       ide().moveNode(dragged.id, targetNode.id)
       setDraggedNode(null)
     }

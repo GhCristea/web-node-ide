@@ -5,14 +5,9 @@ import { MonacoEditor } from 'solid-monaco'
 import { TerminalComponent } from './TerminalComponent'
 import { showToast } from '../toasts/toastStore'
 import { useIDEStore } from './IDEStore'
-
 import 'solid-resizable-panels/styles.css'
 import { FileTree } from './FileTree'
-
-type MonacoOptions = Pick<
-  Required<Pick<Parameters<typeof MonacoEditor>[0], 'options'>>['options'],
-  'fontFamily' | 'fontWeight' | 'fontSize' | 'fontVariations' | 'fontLigatures' | 'theme'
->
+import type { MonacoOptions, FsKind } from './types'
 
 export function IDE() {
   const ide = useIDEStore()
@@ -31,7 +26,7 @@ export function IDE() {
     showToast('File saved', 'success')
   }
 
-  const handleCreate = async (type: 'file' | 'folder') => {
+  const handleCreate = async (type: FsKind) => {
     const name = prompt(`Enter ${type} name:`)
     if (name) {
       await ide().createFile(name, type, null)
@@ -68,7 +63,7 @@ export function IDE() {
           <Save size={14} /> Save
         </button>
         <button onClick={() => handleCreate('file')}>+ File</button>
-        <button onClick={() => handleCreate('folder')}>+ Folder</button>
+        <button onClick={() => handleCreate('directory')}>+ Folder</button>
         <button onClick={async () => await ide().mountFromLocal()} disabled={!ide().isWcReady}>
           📂 Open
         </button>

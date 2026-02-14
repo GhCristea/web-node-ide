@@ -1,18 +1,19 @@
-import { sqlite3Worker1Promiser } from '@sqlite.org/sqlite-wasm'
-import type { SqlitePromiser } from '../types/sqlite'
-import type { FileMetadata } from '../types/fileSystem'
+import { sqlite3Worker1Promiser, type SqlitePromiser } from '@sqlite.org/sqlite-wasm'
+import type { FileRecord, FsKind, Id, ParentId, Content } from './types'
 
-let dbPromise: Promise<SqlitePromiser> | null = null
-let dbId: string | null = null
+type FilesPromiser = SqlitePromiser<FileRecord>
 
-async function createFileSystemSchema(promiser: SqlitePromiser) {
+let dbPromise: Promise<FilesPromiser> | null = null
+let dbId: Id | null = null
+
+async function createFileSystemSchema(promiser: FilesPromiser) {
   await promiser('exec', {
     sql: `
       CREATE TABLE IF NOT EXISTS files (
         id TEXT PRIMARY KEY,
         name TEXT NOT NULL,
         parentId TEXT,
-        type TEXT CHECK( type IN ('file', 'folder') ) NOT NULL DEFAULT 'file',
+        type TEXT CHECK( type IN ('file', 'directory') ) NOT NULL DEFAULT 'file',
         content TEXT,
         updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
       )
@@ -29,9 +30,9 @@ export async function initDb() {
     try {
       console.log('Loading and initializing SQLite3 module...')
 
-      const promiser = (await new Promise<unknown>(resolve => {
+      const promiser = await new Promise<FilesPromiser>(resolve => {
         const _promiser = sqlite3Worker1Promiser({ onready: () => resolve(_promiser) })
-      })) as SqlitePromiser
+      })
 
       console.log('Done initializing. Opening database...')
 
@@ -60,17 +61,17 @@ export async function initDb() {
   return dbPromise
 }
 
-export async function getFilesMetadata(): Promise<FileMetadata[]> {
+export async function getFilesMetadata() {
   const promiser = await initDb()
   const result = await promiser('exec', {
     sql: 'SELECT id, name, parentId, type, updated_at FROM files ORDER BY type DESC, name ASC',
     rowMode: 'object',
     dbId
   })
-  return (result.result.resultRows ?? []) as unknown as FileMetadata[]
+  return result.result.resultRows ?? []
 }
 
-export async function saveFileContent(id: string, content: string) {
+export async function saveFileContent(id: Id, content: Content) {
   const promiser = await initDb()
   try {
     await promiser('exec', {
@@ -87,10 +88,10 @@ export async function saveFileContent(id: string, content: string) {
 
 export async function createFile(
   name: string,
-  parentId: string | null,
-  type: 'file' | 'folder',
-  content: string = '',
-  explicitId?: string
+  parentId: ParentId,
+  type: FsKind,
+  content: Content = '',
+  explicitId?: Id
 ) {
   const promiser = await initDb()
   const id = explicitId || crypto.randomUUID()
@@ -108,7 +109,7 @@ export async function createFile(
   }
 }
 
-export async function renameFile(id: string, newName: string) {
+export async function renameFile(id: Id, newName: string) {
   const promiser = await initDb()
   try {
     await promiser('exec', {
@@ -123,7 +124,7 @@ export async function renameFile(id: string, newName: string) {
   }
 }
 
-export async function moveFile(id: string, newParentId: string | null) {
+export async function moveFile(id: Id, newParentId: ParentId) {
   const promiser = await initDb()
   try {
     await promiser('exec', {
@@ -138,7 +139,7 @@ export async function moveFile(id: string, newParentId: string | null) {
   }
 }
 
-export async function deleteFile(id: string) {
+export async function deleteFile(id: Id) {
   const promiser = await initDb()
   try {
     await promiser('exec', {
@@ -155,14 +156,14 @@ export async function deleteFile(id: string) {
       bind: [id],
       dbId
     })
-    console.log(`Deleted file/folder ${id} and its descendants`)
+    console.log(`Deleted file/directory ${id} and its descendants`)
   } catch (error) {
     console.error('Failed to delete file:', error)
     throw error
   }
 }
 
-export async function getFileContent(id: string): Promise<string> {
+export async function getFileContent(id: Id) {
   const promiser = await initDb()
   const result = await promiser('exec', {
     sql: 'SELECT content FROM files WHERE id = ?',
@@ -171,21 +172,24 @@ export async function getFileContent(id: string): Promise<string> {
     dbId
   })
   const rows = result.result.resultRows
-  return rows && rows.length > 0 ? (rows[0] as { content: string }).content : ''
+  return rows && rows.length > 0 ? rows[0].content : ''
 }
 
-export async function getBatchFileContent(ids: string[]): Promise<Record<string, string>> {
+export async function getBatchFileContent(ids: Id[]) {
   if (ids.length === 0) return {}
   const promiser = await initDb()
   const placeholders = ids.map(() => '?').join(',')
+
   const result = await promiser('exec', {
     sql: `SELECT id, content FROM files WHERE id IN (${placeholders})`,
     bind: ids,
     rowMode: 'object',
     dbId
   })
-  const rows = (result.result.resultRows ?? []) as { id: string; content: string }[]
-  return rows.reduce(
+
+  if (!result.result.resultRows) return {}
+
+  return result.result.resultRows.reduce(
     (acc, row) => {
       acc[row.id] = row.content
       return acc
