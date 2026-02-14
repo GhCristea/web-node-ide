@@ -2,10 +2,10 @@
   "semi": false,
   "singleQuote": true,
   "trailingComma": "none",
-  "printWidth": 95,
+  "printWidth": 115,
   "tabWidth": 2,
   "arrowParens": "avoid",
-  "objectWrap": "preserve",
+  "objectWrap": "collapse",
   "bracketSpacing": true,
   "checkIgnorePragma": true,
   "experimentalOperatorPosition": "end"
