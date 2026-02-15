@@ -1,20 +1,14 @@
-/* Global Vars reused from index.css if needed, but keeping scoped here */
 .ide-container {
   height: 100vh;
   width: 100vw;
-  display: flex;
-  flex-direction: column;
-  background-color: #1e1e1e;
-  color: #cccccc;
 }
 
-/* --- Header --- */
 .header {
   height: 35px;
   background-color: #3c3c3c;
   display: flex;
   align-items: center;
-  justify-content: space-between; /* Space out title/actions from potential right side items */
+  gap: 10px;
   padding: 0 10px;
   border-bottom: 1px solid #252526;
   font-size: 13px;
@@ -53,41 +47,26 @@
   cursor: not-allowed;
 }
 
-/* --- Resizable Panels --- */
 .resize-handle {
-  background-color: transparent; /* Invisible but clickable by default */
+  background-color: transparent;
   transition: background-color 0.2s;
   z-index: 10;
 }
 .resize-handle:hover,
 .resize-handle[data-resize-handle-active] {
-  background-color: #007acc; /* VS Code blue on hover */
+  background-color: #007acc;
 }
 
 .resize-handle.vertical {
   width: 4px;
   cursor: col-resize;
-  background-color: #252526; /* separator line */
+  background-color: #252526;
 }
 
 .resize-handle.horizontal {
   height: 4px;
   cursor: row-resize;
-  background-color: #252526; /* separator line */
-}
-
-/* --- Sidebar / File Tree --- */
-.sidebar {
   background-color: #252526;
-  height: 100%;
-  display: flex;
-  flex-direction: column;
-}
-
-.file-tree-container {
-  flex: 1;
-  overflow-y: auto;
-  padding-top: 5px;
 }
 
 .file-tree-title {
@@ -105,11 +84,9 @@
   align-items: center;
   padding: 3px 10px;
   cursor: pointer;
-  font-size: 13px;
-  color: #cccccc;
   user-select: none;
   white-space: nowrap;
-  border-left: 2px solid transparent; /* marker placeholder */
+  border-left: 2px solid transparent;
 }
 
 .tree-item:hover {
@@ -128,32 +105,20 @@
   width: 10px; /* Indent per level handled in component via padding-left */
 }
 
-/* --- Editor Area --- */
-.editor-container {
-  height: 100%;
+.full {
   width: 100%;
-  overflow: hidden;
-  position: relative;
+  height: 100%;
 }
 
-/* Placeholder for when no file is selected */
-.empty-editor {
+.flex {
   display: flex;
-  height: 100%;
-  width: 100%;
+}
+
+.flex-center {
   align-items: center;
   justify-content: center;
-  color: #555;
-  font-size: 14px;
-  background-color: #1e1e1e;
 }
 
-/* --- Terminal Area --- */
-.terminal-container {
-  height: 100%;
-  width: 100%;
-  background-color: #1e1e1e;
-  border-top: 1px solid #333;
-  padding: 0;
-  overflow: hidden;
+.grow-1 {
+  flex-grow: 1;
 }

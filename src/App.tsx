@@ -1,14 +1,24 @@
-import { IDE } from './IDE';
-import { ToastProvider } from './toasts/ToastContext';
-import './App.css';
-import { IDEProvider } from './IDE/IDEStore';
+import { lazy, Suspense } from 'solid-js'
+import './App.css'
+
+const IDE = lazy(() => import('./IDE').then(m => ({ default: m.IDE })))
+const ToastContainer = lazy(() => import('./toasts/ToastContainer').then(m => ({ default: m.ToastContainer })))
 
 export default function App() {
   return (
-    <ToastProvider>
-      <IDEProvider>
+    <>
+      <Suspense
+        fallback={
+          <div style={{ height: '100vh', display: 'flex', 'align-items': 'center', 'justify-content': 'center' }}>
+            Loading Editor...
+          </div>
+        }
+      >
         <IDE />
-      </IDEProvider>
-    </ToastProvider>
-  );
+      </Suspense>
+      <Suspense>
+        <ToastContainer />
+      </Suspense>
+    </>
+  )
 }

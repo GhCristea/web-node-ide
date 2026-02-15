@@ -1,66 +1,55 @@
-import { useEffect, useRef, useImperativeHandle, forwardRef } from 'react';
-import { Terminal } from '@xterm/xterm';
-import { FitAddon } from '@xterm/addon-fit';
+import { onMount, onCleanup } from 'solid-js'
+import { Terminal } from '@xterm/xterm'
+import { FitAddon } from '@xterm/addon-fit'
+import '@xterm/xterm/css/xterm.css'
+import type { TerminalHandle } from './types'
 
-export interface TerminalHandle {
-  write: (text: string) => void;
-  clear: () => void;
-}
+export function TerminalComponent(props: { ref?: (handle: TerminalHandle) => void }) {
+  let terminalDiv: HTMLDivElement | undefined
+  let xterm: Terminal | null = null
+  let fitAddon: FitAddon | null = null
 
-export const TerminalComponent = forwardRef<TerminalHandle>((_, ref) => {
-  const terminalRef = useRef<HTMLDivElement>(null);
-  const xterm = useRef<Terminal | null>(null);
-  const fitAddon = useRef<FitAddon | null>(null);
+  onMount(() => {
+    if (!terminalDiv) return
 
-  useImperativeHandle(ref, () => ({
-    write: (text: string) => xterm.current?.write(text),
-    clear: () => xterm.current?.reset()
-  }));
-
-  useEffect(() => {
-    if (!terminalRef.current) return;
-
-    xterm.current = new Terminal({
+    xterm = new Terminal({
       cursorBlink: true,
       theme: { background: '#1e1e1e' },
       fontSize: 12,
       fontFamily: 'monospace',
       convertEol: true
-    });
+    })
 
-    fitAddon.current = new FitAddon();
-    xterm.current.loadAddon(fitAddon.current);
-    xterm.current.open(terminalRef.current);
+    fitAddon = new FitAddon()
+    xterm.loadAddon(fitAddon)
+    xterm.open(terminalDiv)
 
-    // Initial fit
     setTimeout(() => {
-      fitAddon.current?.fit();
-    }, 0);
+      fitAddon?.fit()
+    }, 0)
 
-    xterm.current.writeln('\x1b[1;32m⚡ Terminal Ready\x1b[0m');
+    xterm.writeln('\x1b[1;32m⚡ Terminal Ready\x1b[0m')
 
     const resizeObserver = new ResizeObserver(() => {
-      fitAddon.current?.fit();
-    });
+      fitAddon?.fit()
+    })
 
-    resizeObserver.observe(terminalRef.current);
+    resizeObserver.observe(terminalDiv)
 
-    return () => {
-      resizeObserver.disconnect();
-      xterm.current?.dispose();
-    };
-  }, []);
+    if (props.ref) {
+      props.ref({ write: text => xterm?.write(text), clear: () => xterm?.reset() })
+    }
+
+    onCleanup(() => {
+      resizeObserver.disconnect()
+      xterm?.dispose()
+    })
+  })
 
   return (
     <div
-      ref={terminalRef}
-      style={{
-        height: '100%',
-        width: '100%',
-        backgroundColor: '#1e1e1e',
-        padding: 1,
-        overflow: 'hidden' // Ensure no scrollbars interfere
-      }}
+      ref={terminalDiv}
+      style={{ height: '100%', width: '100%', 'background-color': '#1e1e1e', padding: '1px', overflow: 'hidden' }}
     />
-  );
-});
+  )
+}
