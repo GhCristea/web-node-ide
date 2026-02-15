@@ -4,14 +4,23 @@ import { Play, Save } from 'lucide-solid'
 import { MonacoEditor } from 'solid-monaco'
 import { TerminalComponent } from './TerminalComponent'
 import { showToast } from '../toasts/toastStore'
-import { useIDEStore } from './IDEStore'
+import {
+  ideStore,
+  initialize,
+  saveFile,
+  createFile,
+  mountFromLocal,
+  reset,
+  run,
+  selectFile,
+  updateFileContent,
+  setTerminal
+} from './IDEStore'
 import 'solid-resizable-panels/styles.css'
 import { FileTree } from './FileTree'
 import type { MonacoOptions, FsKind } from './types'
 
 export function IDE() {
-  const ide = useIDEStore()
-
   const options: MonacoOptions = {
     fontFamily: 'Fira Code',
     fontWeight: 'normal',
@@ -22,14 +31,14 @@ export function IDE() {
   }
 
   const handleSave = async () => {
-    await ide().saveFile()
+    await saveFile()
     showToast('File saved', 'success')
   }
 
   const handleCreate = async (type: FsKind) => {
     const name = prompt(`Enter ${type} name:`)
     if (name) {
-      await ide().createFile(name, type, null)
+      await createFile(name, type, null)
     }
   }
 
@@ -43,31 +52,31 @@ export function IDE() {
     window.addEventListener('keydown', handleKeyDown)
     onCleanup(() => window.removeEventListener('keydown', handleKeyDown))
 
-    ide().initialize()
+    initialize()
   })
 
   return (
     <div class="ide-container">
       <header class="header">
-        <span>⚡ Web IDE {ide().isDbReady ? '(Ready)' : '(Loading...)'}</span>
+        <span>⚡ Web IDE {ideStore.isDbReady ? '(Ready)' : '(Loading...)'}</span>
         <button
           onClick={async () => {
-            await ide().saveFile()
-            ide().run()
+            await saveFile()
+            run()
           }}
-          disabled={ide().isRunning || !ide().selectedFileId}
+          disabled={ideStore.isRunning || !ideStore.selectedFileId}
         >
           <Play size={14} /> Run
         </button>
-        <button onClick={handleSave} disabled={!ide().selectedFileId}>
+        <button onClick={handleSave} disabled={!ideStore.selectedFileId}>
           <Save size={14} /> Save
         </button>
         <button onClick={() => handleCreate('file')}>+ File</button>
         <button onClick={() => handleCreate('directory')}>+ Folder</button>
-        <button onClick={async () => await ide().mountFromLocal()} disabled={!ide().isWcReady}>
+        <button onClick={async () => await mountFromLocal()} disabled={!ideStore.isWcReady}>
           📂 Open
         </button>
-        <button onClick={() => ide().reset()} style={{ 'margin-left': '10px', color: 'red' }}>
+        <button onClick={() => reset()} style={{ 'margin-left': '10px', color: 'red' }}>
           Reset
         </button>
       </header>
@@ -77,9 +86,9 @@ export function IDE() {
           <PanelGroup direction="row" class="grow-1">
             <Panel id="file-tree" initialSize={25} collapsible>
               <FileTree
-                nodes={ide().files}
-                onFileSelect={ide().selectFile}
-                selectedFileId={ide().selectedFileId}
+                nodes={ideStore.files}
+                onFileSelect={selectFile}
+                selectedFileId={ideStore.selectedFileId}
               />
             </Panel>
 
@@ -87,17 +96,30 @@ export function IDE() {
 
             <Panel id="editor">
               <Show
-                when={ide().selectedFileId}
+                when={ideStore.selectedFileId}
                 fallback={<div class="flex flex-center full">Select a file to edit</div>}
               >
-                <MonacoEditor
-                  height="100%"
-                  width="100%"
-                  language="javascript"
-                  options={options}
-                  value={ide().fileContent}
-                  onChange={v => ide().updateFileContent(v)}
-                />
+                <Show
+                  when={ideStore.fileContent !== '<<ERROR_LOADING_FILE>>'}
+                  fallback={
+                    <div class="flex flex-center full column" style={{ color: '#ff6b6b' }}>
+                      <div style={{ 'font-size': '24px', 'margin-bottom': '10px' }}>⚠️</div>
+                      <div>Failed to load file content</div>
+                      <div style={{ 'font-size': '12px', opacity: 0.7, 'margin-top': '5px' }}>
+                        Check console for details
+                      </div>
+                    </div>
+                  }
+                >
+                  <MonacoEditor
+                    height="100%"
+                    width="100%"
+                    language="javascript"
+                    options={options}
+                    value={ideStore.fileContent}
+                    onChange={v => updateFileContent(v)}
+                  />
+                </Show>
               </Show>
             </Panel>
           </PanelGroup>
@@ -106,7 +128,7 @@ export function IDE() {
         <ResizeHandle />
 
         <Panel id="terminal-panel" initialSize={25} collapsible>
-          <TerminalComponent ref={ide().setTerminal} />
+          <TerminalComponent ref={setTerminal} />
         </Panel>
       </PanelGroup>
     </div>

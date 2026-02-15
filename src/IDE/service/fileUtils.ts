@@ -85,3 +85,10 @@ export function buildWebContainerTree(filesMap: Record<string, string>) {
   })
   return tree
 }
+
+export function isValidFileName(name: string): boolean {
+  if (!name || name.trim() === '') return false
+  if (name.includes('/') || name.includes('\\')) return false
+  if (name === '.' || name === '..') return false
+  return true
+}

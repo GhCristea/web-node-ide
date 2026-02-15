@@ -35,7 +35,7 @@ export const fileSystemBridge = {
         } catch (error) {
           console.error(`Failed to read file ${name}:`, error)
 
-          contents[id] = ''
+          contents[id] = '<<ERROR_LOADING_FILE>>'
         }
       } else {
         folderHandles.set(id, entry)

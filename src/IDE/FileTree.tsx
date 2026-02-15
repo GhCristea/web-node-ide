@@ -1,6 +1,6 @@
 import { createSignal, createEffect, onCleanup, Show, For } from 'solid-js'
 import { ChevronDown, ChevronRight, File, Folder, Trash2, Edit2, Plus } from 'lucide-solid'
-import { useIDEStore } from './IDEStore'
+import { renameNode, deleteNode, createFile, moveNode } from './IDEStore'
 import type { FileNode, Id, ParentId } from './types'
 
 interface TreeItemProps {
@@ -210,7 +210,6 @@ interface FileTreeProps extends Pick<TreeItemProps, 'selectedFileId' | 'onFileSe
 }
 
 export function FileTree(props: FileTreeProps) {
-  const ide = useIDEStore()
   const [contextMenu, setContextMenu] = createSignal<{ x: number; y: number; nodeId: Id } | null>(null)
   const [editingId, setEditingId] = createSignal<Id | null>(null)
   const [draggedNode, setDraggedNode] = createSignal<FileNode | null>(null)
@@ -225,7 +224,7 @@ export function FileTree(props: FileTreeProps) {
 
   const handleRenameSubmit = (id: Id, newName: string) => {
     if (newName && newName.trim() !== '') {
-      ide().renameNode(id, newName)
+      renameNode(id, newName)
     }
     setEditingId(null)
   }
@@ -234,7 +233,7 @@ export function FileTree(props: FileTreeProps) {
     const menu = contextMenu()
     if (menu?.nodeId) {
       if (confirm('Delete this item?')) {
-        ide().deleteNode(menu.nodeId)
+        deleteNode(menu.nodeId)
       }
     }
   }
@@ -250,7 +249,7 @@ export function FileTree(props: FileTreeProps) {
   const handleCreateFile = async (parentId: ParentId) => {
     const name = prompt('Enter file name:')
     if (name) {
-      await ide().createFile(name, 'file', parentId)
+      await createFile(name, 'file', parentId)
     }
   }
 
@@ -275,7 +274,7 @@ export function FileTree(props: FileTreeProps) {
   const onDrop = (_: DragEvent, targetNode: FileNode) => {
     const dragged = draggedNode()
     if (dragged && targetNode.type === 'directory' && dragged.id !== targetNode.id) {
-      ide().moveNode(dragged.id, targetNode.id)
+      moveNode(dragged.id, targetNode.id)
       setDraggedNode(null)
     }
   }
@@ -284,7 +283,7 @@ export function FileTree(props: FileTreeProps) {
     e.preventDefault()
     const dragged = draggedNode()
     if (dragged) {
-      ide().moveNode(dragged.id, null)
+      moveNode(dragged.id, null)
       setDraggedNode(null)
     }
   }

@@ -1,29 +1,23 @@
 import type { WebContainer } from '@webcontainer/api'
-import { buildTree, buildWebContainerTree, generatePaths } from './fileUtils'
+import { buildTree, buildWebContainerTree, generatePaths, isValidFileName } from './fileUtils'
 import { fileSystemBridge } from './fileSystemBridge'
 import { showToast } from '../../toasts/toastStore'
-import type { FileMetadata, DB, TerminalHandle, FsKind, Id, ParentId, Content, FileNode } from '../types'
+import type { DB, TerminalHandle, FsKind, Id, ParentId, Content, FileNode } from '../types'
 
 export function createIDEService(deps: { db: DB; terminal: TerminalHandle }) {
-  let _filesCache: FileMetadata[] = []
-  let _pathsCache = new Map<Id, string>()
-  const _pathToIdCache = new Map<string, Id>()
-
   type TreeUpdateCallback = (tree: FileNode[]) => void
 
-  const refreshCaches = (files: FileMetadata[]) => {
-    _filesCache = files
-    _pathsCache = generatePaths(files)
-    _pathToIdCache.clear()
-    _pathsCache.forEach((id, path) => _pathToIdCache.set(path, id))
+  const getFilePath = async (fileId: Id) => {
+    const files = await deps.db.getFilesMetadata()
+    const paths = generatePaths(files)
+    return paths.get(fileId) || null
   }
 
-  const getPathFromCache = (fileId: Id) => _pathsCache.get(fileId) || null
-
-  const resolveParentId = (selectedFileId: Id | null, explicitParentId?: ParentId) => {
+  const resolveParentId = async (selectedFileId: Id | null, explicitParentId?: ParentId) => {
     if (explicitParentId !== undefined) return explicitParentId
     if (selectedFileId) {
-      const node = _filesCache.find(f => f.id === selectedFileId)
+      const files = await deps.db.getFilesMetadata()
+      const node = files.find(f => f.id === selectedFileId)
       if (node) return node.type === 'directory' ? node.id : node.parentId
     }
     return null
@@ -41,17 +35,26 @@ export function createIDEService(deps: { db: DB; terminal: TerminalHandle }) {
     }
   }
 
+  let debounceTimer: ReturnType<typeof setTimeout> | null = null
+
   const handleFsEvent = async (filename: string, webContainer: WebContainer, onTreeUpdate: TreeUpdateCallback) => {
     if (!filename || filename.includes('node_modules') || filename.includes('.git')) return
 
     try {
       const stats = await getEntryStats(webContainer, filename)
-      const existingId = _pathToIdCache.get(filename)
+
+      const existingFiles = await deps.db.getFilesMetadata()
+      const paths = generatePaths(existingFiles)
+
+      const pathMap = new Map<string, Id>()
+      paths.forEach((p, id) => pathMap.set(p, id))
+
+      const existingId = pathMap.get(filename)
 
       if (stats) {
         const parentPath = filename.split('/').slice(0, -1).join('/')
         const name = filename.split('/').pop()!
-        const parentId = parentPath ? _pathToIdCache.get(parentPath) || null : null
+        const parentId = parentPath ? pathMap.get(parentPath) || null : null
 
         if (stats.isDirectory()) {
           if (!existingId) await deps.db.createFile(name, parentId, 'directory', '')
@@ -67,9 +70,13 @@ export function createIDEService(deps: { db: DB; terminal: TerminalHandle }) {
         await deps.db.deleteFile(existingId)
       }
 
-      const allFiles = await deps.db.getFilesMetadata()
-      refreshCaches(allFiles)
-      onTreeUpdate(buildTree(allFiles))
+      if (debounceTimer) clearTimeout(debounceTimer)
+
+      debounceTimer = setTimeout(async () => {
+        const allFiles = await deps.db.getFilesMetadata()
+        onTreeUpdate(buildTree(allFiles))
+        debounceTimer = null
+      }, 50)
     } catch (err) {
       console.error('[FS Sync Error]', err)
       showToast('File system sync error', 'error')
@@ -81,7 +88,6 @@ export function createIDEService(deps: { db: DB; terminal: TerminalHandle }) {
 
     async loadFiles() {
       const allFiles = await deps.db.getFilesMetadata()
-      refreshCaches(allFiles)
       const tree = buildTree(allFiles)
       return tree
     },
@@ -89,9 +95,12 @@ export function createIDEService(deps: { db: DB; terminal: TerminalHandle }) {
     async mountProjectFiles(webContainer: WebContainer, onTreeUpdate: TreeUpdateCallback) {
       if (!webContainer) return
 
-      const validFiles = _filesCache.filter(f => {
+      const allFiles = await deps.db.getFilesMetadata()
+      const paths = generatePaths(allFiles)
+
+      const validFiles = allFiles.filter(f => {
         if (f.type === 'directory') return false
-        const path = _pathsCache.get(f.id)
+        const path = paths.get(f.id)
         return path && !path.split('/').includes('node_modules')
       })
 
@@ -105,7 +114,7 @@ export function createIDEService(deps: { db: DB; terminal: TerminalHandle }) {
         const contents = await deps.db.getBatchFileContent(chunkIds)
 
         chunkIds.forEach(id => {
-          const path = _pathsCache.get(id)
+          const path = paths.get(id)
           if (path && contents[id] !== undefined) {
             mountTree[path] = contents[id]
           }
@@ -137,7 +146,6 @@ export function createIDEService(deps: { db: DB; terminal: TerminalHandle }) {
       }
 
       const allFiles = await deps.db.getFilesMetadata()
-      refreshCaches(allFiles)
       const treeRoots = buildTree(allFiles)
 
       await this.mountProjectFiles(webContainer, onTreeUpdate)
@@ -156,7 +164,7 @@ export function createIDEService(deps: { db: DB; terminal: TerminalHandle }) {
       writeFile: (path: string, content: Content) => Promise<void>
     ) {
       if (isWcReady) {
-        const path = getPathFromCache(id)
+        const path = await getFilePath(id)
         if (path) {
           await writeFile(path, content)
         }
@@ -179,10 +187,14 @@ export function createIDEService(deps: { db: DB; terminal: TerminalHandle }) {
       explicitParentId: ParentId | undefined,
       webContainer?: WebContainer | null
     ) {
-      const parentId = resolveParentId(selectedFileId, explicitParentId)
+      if (!isValidFileName(name)) {
+        throw new Error(`Invalid file name: "${name}"`)
+      }
+
+      const parentId = await resolveParentId(selectedFileId, explicitParentId)
 
       if (webContainer) {
-        const parentPath = parentId ? getPathFromCache(parentId) || '' : ''
+        const parentPath = parentId ? (await getFilePath(parentId)) || '' : ''
         const fullPath = parentPath ? `${parentPath}/${name}` : name
 
         if (type === 'directory') await webContainer.fs.mkdir(fullPath)
@@ -195,7 +207,7 @@ export function createIDEService(deps: { db: DB; terminal: TerminalHandle }) {
 
     async deleteNode(id: Id, webContainer?: WebContainer | null) {
       if (webContainer) {
-        const path = getPathFromCache(id)
+        const path = await getFilePath(id)
         if (path) {
           await webContainer.fs.rm(path, { recursive: true, force: true })
         }
@@ -207,7 +219,7 @@ export function createIDEService(deps: { db: DB; terminal: TerminalHandle }) {
 
     async renameNode(id: Id, newName: string, webContainer?: WebContainer | null) {
       if (webContainer) {
-        const oldPath = getPathFromCache(id)
+        const oldPath = await getFilePath(id)
         if (oldPath) {
           const pathParts = oldPath.split('/')
           pathParts.pop()
@@ -223,11 +235,11 @@ export function createIDEService(deps: { db: DB; terminal: TerminalHandle }) {
 
     async moveNode(id: Id, newParentId: ParentId, webContainer?: WebContainer | null) {
       if (webContainer) {
-        const oldPath = getPathFromCache(id)
+        const oldPath = await getFilePath(id)
         if (oldPath) {
           let newParentPath = ''
           if (newParentId) {
-            const p = getPathFromCache(newParentId)
+            const p = await getFilePath(newParentId)
             if (p) newParentPath = p
           }
           const fileName = oldPath.split('/').pop() as string
@@ -250,7 +262,7 @@ export function createIDEService(deps: { db: DB; terminal: TerminalHandle }) {
     async runFile(fileId: Id, isWcReady: boolean, webContainer: WebContainer) {
       if (!isWcReady || !webContainer) return
 
-      const path = getPathFromCache(fileId)
+      const path = await getFilePath(fileId)
       if (!path) return
 
       deps.terminal.write(`\r\n\x1b[1;36m➤ ${new Date().toUTCString()} Executing ${path}...\x1b[0m\r\n`)

@@ -23,9 +23,7 @@
     "lucide-solid": "^0.563.0",
     "solid-js": "^1.9.11",
     "solid-monaco": "^0.3.0",
-    "solid-resizable-panels": "^0.5.4",
-    "solid-zustand": "^2.0.0",
-    "zustand": "^5.0.11"
+    "solid-resizable-panels": "^0.5.4"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.1",
